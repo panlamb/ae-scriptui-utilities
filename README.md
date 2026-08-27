@@ -19,6 +19,12 @@ One-click multi-format generation from an active master comp. Instantly generate
 * **4:5 Portrait** (1080x1350)
 * **Batch All Formats**
 
+#### 4. Text Stagger Splitter (`TextStaggerSplitter.jsx`)
+Splits a text layer into per-line, per-word, or per-character layers (or shape layers via "Create Shapes from Text") while preserving exact original position, then staggers the in-points of any selected layers by a configurable frame step. Can optionally auto-precompose the split result.
+
+#### 5. StopMotionify Framerate Controller (`StopMotionifyFramerateController.jsx`)
+Applies a Posterize Time effect to selected layers to simulate stop-motion frame rates (12/8/15 fps), with an optional handcrafted "tactile jitter" wiggle expression on Position/Rotation. Includes a one-click removal of both the effect and the jitter expressions.
+
 ---
 
 ### Installation
