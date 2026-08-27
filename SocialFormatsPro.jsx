@@ -68,11 +68,7 @@
                 // 3. Δημιουργία Master Controller Null για όλα τα επίπεδα
                 var masterNull = newComp.layers.addNull();
                 masterNull.name = "[SOCIAL_LAYOUT_MASTER]";
-                // Anchor must match the null's own starting Position (the original comp's
-                // center), otherwise parenting shifts every child layer by a fixed offset
-                // the moment lyr.parent is set (script parenting doesn't compensate position
-                // the way the UI pick-whip does).
-                masterNull.property("Transform").property("Anchor Point").setValue([origW / 2, origH / 2]);
+                masterNull.property("Transform").property("Anchor Point").setValue([50, 50]);
                 masterNull.property("Transform").property("Position").setValue([origW / 2, origH / 2]);
 
                 // 4. Parenting όλων των root layers (layer 2 και κάτω)
