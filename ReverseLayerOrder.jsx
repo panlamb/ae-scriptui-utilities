@@ -11,36 +11,39 @@
 
         btnReverse.onClick = function () {
             app.beginUndoGroup("Reverse Selected Layers");
+            try {
+                var comp = app.project.activeItem;
+                if (!comp || !(comp instanceof CompItem)) {
+                    alert("Επιλέξτε μια ενεργή σύνθεση.");
+                    return;
+                }
 
-            var comp = app.project.activeItem;
-            if (!comp || !(comp instanceof CompItem)) {
-                alert("Επιλέξτε μια ενεργή σύνθεση.");
-                return;
+                var sel = comp.selectedLayers;
+                if (sel.length < 2) {
+                    alert("Επιλέξτε τουλάχιστον 2 layers για αντιστροφή.");
+                    return;
+                }
+
+                // 1. Συλλογή και ταξινόμηση των επιλεγμένων layers κατά index (από πάνω προς τα κάτω)
+                var sortedLayers = [];
+                for (var i = 0; i < sel.length; i++) {
+                    sortedLayers.push(sel[i]);
+                }
+                sortedLayers.sort(function (a, b) {
+                    return a.index - b.index;
+                });
+
+                // 2. Αντιστροφή: Τοποθετούμε διαδοχικά κάθε επόμενο layer ΠΑΝΩ από το προηγούμενο top
+                var topLayer = sortedLayers[0];
+                for (var j = 1; j < sortedLayers.length; j++) {
+                    sortedLayers[j].moveBefore(topLayer);
+                    topLayer = sortedLayers[j];
+                }
+            } catch (err) {
+                alert("Σφάλμα: " + err.toString());
+            } finally {
+                app.endUndoGroup();
             }
-
-            var sel = comp.selectedLayers;
-            if (sel.length < 2) {
-                alert("Επιλέξτε τουλάχιστον 2 layers για αντιστροφή.");
-                return;
-            }
-
-            // 1. Συλλογή και ταξινόμηση των επιλεγμένων layers κατά index (από πάνω προς τα κάτω)
-            var sortedLayers = [];
-            for (var i = 0; i < sel.length; i++) {
-                sortedLayers.push(sel[i]);
-            }
-            sortedLayers.sort(function (a, b) {
-                return a.index - b.index;
-            });
-
-            // 2. Αντιστροφή: Τοποθετούμε διαδοχικά κάθε επόμενο layer ΠΑΝΩ από το προηγούμενο top
-            var topLayer = sortedLayers[0];
-            for (var j = 1; j < sortedLayers.length; j++) {
-                sortedLayers[j].moveBefore(topLayer);
-                topLayer = sortedLayers[j];
-            }
-
-            app.endUndoGroup();
         };
 
         win.layout.layout(true);

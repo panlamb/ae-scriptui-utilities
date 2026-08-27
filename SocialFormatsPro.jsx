@@ -46,76 +46,80 @@
 
         function convertToFormat(targetW, targetH, suffix) {
             app.beginUndoGroup("Create Social Version - " + suffix);
-
-            var masterComp = app.project.activeItem;
-            if (!masterComp || !(masterComp instanceof CompItem)) {
-                alert("Παρακαλώ επιλέξτε το Master Composition.");
-                return;
-            }
-
-            var origW = masterComp.width;
-            var origH = masterComp.height;
-
-            // 1. True Duplicate της σύνθεσης (όχι nested pre-comp)
-            var newComp = masterComp.duplicate();
-            newComp.name = masterComp.name + "_" + suffix;
-            newComp.parentFolder = getOrCreateFolder("_Social_Versions");
-
-            // 2. Αλλαγή διαστάσεων του νέου comp
-            newComp.width = targetW;
-            newComp.height = targetH;
-
-            // 3. Δημιουργία Master Controller Null για όλα τα επίπεδα
-            var masterNull = newComp.layers.addNull();
-            masterNull.name = "[SOCIAL_LAYOUT_MASTER]";
-            masterNull.property("Transform").property("Anchor Point").setValue([50, 50]);
-            masterNull.property("Transform").property("Position").setValue([origW / 2, origH / 2]);
-
-            // 4. Parenting όλων των root layers (layer 2 και κάτω)
-            for (var i = 2; i <= newComp.layers.length; i++) {
-                var lyr = newComp.layers[i];
-                if (lyr.parent === null && !lyr.locked) {
-                    lyr.parent = masterNull;
-                }
-            }
-
-            // 5. Μετακίνηση του Controller στο κέντρο του νέου κάδρου
-            masterNull.property("Transform").property("Position").setValue([targetW / 2, targetH / 2]);
-
-            // 6. Προσαρμογή Scale
-            if (rbFitWidth.value) {
-                var scaleRatio = (targetW / origW) * 100;
-                masterNull.property("Transform").property("Scale").setValue([scaleRatio, scaleRatio]);
-            }
-
-            // 7. Προσθήκη UI Safe Zones (Guide Layer) αν είναι 9:16
-            if (chkGuides.value && suffix === "9x16") {
-                var guide = newComp.layers.addShape();
-                guide.name = "[UI_Safe_Zones_Guide]";
-                guide.guideLayer = true;
-                guide.locked = true;
-
-                var gRoot = guide.property("ADBE Root Vectors Group");
-
-                function addGuideBlock(yPos, height) {
-                    var grp = gRoot.addProperty("ADBE Vector Group");
-                    var cnt = grp.property("ADBE Vectors Group");
-                    var rect = cnt.addProperty("ADBE Vector Shape - Rect");
-                    rect.property("ADBE Vector Rect Size").setValue([targetW, height]);
-                    rect.property("ADBE Vector Rect Position").setValue([0, yPos]);
-
-                    var fill = cnt.addProperty("ADBE Vector Graphic - Fill");
-                    fill.property("ADBE Vector Fill Color").setValue([1.0, 0.2, 0.3]);
-                    fill.property("ADBE Vector Fill Opacity").setValue(20);
+            try {
+                var masterComp = app.project.activeItem;
+                if (!masterComp || !(masterComp instanceof CompItem)) {
+                    alert("Παρακαλώ επιλέξτε το Master Composition.");
+                    return;
                 }
 
-                guide.property("Transform").property("Position").setValue([targetW / 2, targetH / 2]);
-                addGuideBlock(-(targetH / 2) + 125, 250); // Header bar
-                addGuideBlock((targetH / 2) - 190, 380);  // Reels / TikTok UI
-            }
+                var origW = masterComp.width;
+                var origH = masterComp.height;
 
-            newComp.openInViewer();
-            app.endUndoGroup();
+                // 1. True Duplicate της σύνθεσης (όχι nested pre-comp)
+                var newComp = masterComp.duplicate();
+                newComp.name = masterComp.name + "_" + suffix;
+                newComp.parentFolder = getOrCreateFolder("_Social_Versions");
+
+                // 2. Αλλαγή διαστάσεων του νέου comp
+                newComp.width = targetW;
+                newComp.height = targetH;
+
+                // 3. Δημιουργία Master Controller Null για όλα τα επίπεδα
+                var masterNull = newComp.layers.addNull();
+                masterNull.name = "[SOCIAL_LAYOUT_MASTER]";
+                masterNull.property("Transform").property("Anchor Point").setValue([50, 50]);
+                masterNull.property("Transform").property("Position").setValue([origW / 2, origH / 2]);
+
+                // 4. Parenting όλων των root layers (layer 2 και κάτω)
+                for (var i = 2; i <= newComp.layers.length; i++) {
+                    var lyr = newComp.layers[i];
+                    if (lyr.parent === null && !lyr.locked) {
+                        lyr.parent = masterNull;
+                    }
+                }
+
+                // 5. Μετακίνηση του Controller στο κέντρο του νέου κάδρου
+                masterNull.property("Transform").property("Position").setValue([targetW / 2, targetH / 2]);
+
+                // 6. Προσαρμογή Scale
+                if (rbFitWidth.value) {
+                    var scaleRatio = (targetW / origW) * 100;
+                    masterNull.property("Transform").property("Scale").setValue([scaleRatio, scaleRatio]);
+                }
+
+                // 7. Προσθήκη UI Safe Zones (Guide Layer) αν είναι 9:16
+                if (chkGuides.value && suffix === "9x16") {
+                    var guide = newComp.layers.addShape();
+                    guide.name = "[UI_Safe_Zones_Guide]";
+                    guide.guideLayer = true;
+                    guide.locked = true;
+
+                    var gRoot = guide.property("ADBE Root Vectors Group");
+
+                    var addGuideBlock = function (yPos, height) {
+                        var grp = gRoot.addProperty("ADBE Vector Group");
+                        var cnt = grp.property("ADBE Vectors Group");
+                        var rect = cnt.addProperty("ADBE Vector Shape - Rect");
+                        rect.property("ADBE Vector Rect Size").setValue([targetW, height]);
+                        rect.property("ADBE Vector Rect Position").setValue([0, yPos]);
+
+                        var fill = cnt.addProperty("ADBE Vector Graphic - Fill");
+                        fill.property("ADBE Vector Fill Color").setValue([1.0, 0.2, 0.3]);
+                        fill.property("ADBE Vector Fill Opacity").setValue(20);
+                    };
+
+                    guide.property("Transform").property("Position").setValue([targetW / 2, targetH / 2]);
+                    addGuideBlock(-(targetH / 2) + 125, 250); // Header bar
+                    addGuideBlock((targetH / 2) - 190, 380);  // Reels / TikTok UI
+                }
+
+                newComp.openInViewer();
+            } catch (err) {
+                alert("Σφάλμα: " + err.toString());
+            } finally {
+                app.endUndoGroup();
+            }
         }
 
         btn916.onClick = function () { convertToFormat(1080, 1920, "9x16"); };
