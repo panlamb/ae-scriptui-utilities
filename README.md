@@ -49,4 +49,4 @@ Applies a Posterize Time effect to selected layers to simulate stop-motion frame
 ---
 
 ### License & Support
-Free to use in personal and commercial projects. If you find these useful and wish to support future updates, tips are appreciated via Gumroad.
+Free to use in personal and commercial projects. If you find these useful and wish to support future updates, tips are appreciated via [Gumroad](https://8604769003016.gumroad.com/).
