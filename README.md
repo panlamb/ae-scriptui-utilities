@@ -9,8 +9,12 @@ A collection of lightweight, dockable ScriptUI utility panels for Adobe After Ef
 #### 1. Smart Pre-compose (`SmartPrecompose.jsx`)
 Automatically calculates the exact visual bounding box of your selected layers, creates the pre-comp cropped precisely to that size, and positions it seamlessly in your main composition without shifting any elements.
 
+![Smart Pre-compose panel](images/smart-precompose.png)
+
 #### 2. Reverse Layer Order (`ReverseLayerOrder.jsx`)
 Instantly inverts the timeline stacking order of any selected layers with a single click. Ideal for fixing reversed vector import hierarchies and typography stacks.
+
+![Reverse Layer Order panel](images/reverse-layer-order.png)
 
 #### 3. Social Formats Pro (`SocialFormatsPro.jsx`)
 One-click multi-format generation from an active master comp. Instantly generates auto-centered and scaled compositions for:
@@ -19,11 +23,17 @@ One-click multi-format generation from an active master comp. Instantly generate
 * **4:5 Portrait** (1080x1350)
 * **Batch All Formats**
 
+![Social Formats Pro panel](images/social-formats-pro.png)
+
 #### 4. Text Stagger Splitter (`TextStaggerSplitter.jsx`)
 Splits a text layer into per-line, per-word, or per-character layers (or shape layers via "Create Shapes from Text") while preserving exact original position, then staggers the in-points of any selected layers by a configurable frame step. Can optionally auto-precompose the split result.
 
+![Text Stagger Splitter panel](images/text-stagger-splitter.png)
+
 #### 5. StopMotionify Framerate Controller (`StopMotionifyFramerateController.jsx`)
 Applies a Posterize Time effect to selected layers to simulate stop-motion frame rates (12/8/15 fps), with an optional handcrafted "tactile jitter" wiggle expression on Position/Rotation. Includes a one-click removal of both the effect and the jitter expressions.
+
+![StopMotionify Framerate Controller panel](images/stopmotionify.png)
 
 ---
 
