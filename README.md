@@ -48,5 +48,23 @@ Applies a Posterize Time effect to selected layers to simulate stop-motion frame
 
 ---
 
+### Illustrator Companion Tool
+
+#### Artboard Exporter for AE (`IllustratorArtboardExporter.jsx`)
+Prepares a multi-artboard Illustrator file for animation in After Effects, in one click:
+1. Saves each artboard out as its own `.ai` file (leaving the original document untouched).
+2. Releases every top-level group in each new file to its own layer (`Release to Layers - Sequence`), so After Effects picks up each element as a separate, animatable layer on import.
+
+**Installation:**
+1. Place `IllustratorArtboardExporter.jsx` in your Illustrator **Scripts** directory:
+   * **Windows:** `C:\Program Files\Adobe\Adobe Illustrator <version>\Presets\en_US\Scripts\`
+   * **macOS:** `/Applications/Adobe Illustrator <version>/Presets/en_US/Scripts/`
+2. Restart Illustrator.
+3. Open your multi-artboard file, run it from **File > Scripts > IllustratorArtboardExporter**, pick an output folder, and confirm.
+
+> Tip: you can also skip splitting into files altogether by importing the original multi-artboard `.ai` into After Effects and using **Interpret Footage > Choose Artboard**, but a separate file per artboard is often cleaner for organizing project bins and handoffs.
+
+---
+
 ### License & Support
 Free to use in personal and commercial projects. If you find these useful and wish to support future updates, tips are appreciated via [Gumroad](https://8604769003016.gumroad.com/).
