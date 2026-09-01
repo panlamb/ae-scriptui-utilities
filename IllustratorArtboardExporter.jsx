@@ -1,6 +1,9 @@
 {
     function buildArtboardExporterUI(thisObj) {
-        var win = (thisObj instanceof Panel) ? thisObj : new Window("palette", "Artboard Exporter for AE", undefined, {resizeable: true});
+        // Illustrator scripts run via File > Scripts execute in a transient engine session
+        // (unlike After Effects' persistent ScriptUI Panels), so a non-modal "palette" window
+        // gets created and torn down before it can render. A modal "dialog" keeps it alive.
+        var win = new Window("dialog", "Artboard Exporter for AE", undefined, {resizeable: true});
         win.orientation = "column";
         win.alignChildren = ["fill", "top"];
         win.spacing = 8;
