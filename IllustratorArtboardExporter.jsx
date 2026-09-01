@@ -87,8 +87,27 @@
             var width = abRect[2] - abRect[0];
             var height = abRect[1] - abRect[3];
 
-            var newDoc = app.documents.add(srcDoc.documentColorSpace, width, height);
-            newDoc.artboards[0].artboardRect = abRect;
+            // Illustrator's maximum document/artboard dimension is ~227 in (16383 pt).
+            // documents.add() throws a bare "PARM" error if this is exceeded, so check first
+            // and fail with a message that actually says what's wrong.
+            var MAX_ARTBOARD_PT = 16383;
+            if (width <= 0 || height <= 0 || width > MAX_ARTBOARD_PT || height > MAX_ARTBOARD_PT) {
+                throw new Error("artboard size " + Math.round(width) + "x" + Math.round(height) +
+                    "pt is outside Illustrator's supported document size (1-" + MAX_ARTBOARD_PT + "pt per side)");
+            }
+
+            var newDoc;
+            try {
+                newDoc = app.documents.add(srcDoc.documentColorSpace, width, height);
+            } catch (eAdd) {
+                throw new Error("documents.add(" + Math.round(width) + "x" + Math.round(height) + "pt) failed: " + eAdd.toString());
+            }
+            try {
+                newDoc.artboards[0].artboardRect = abRect;
+            } catch (eRect) {
+                newDoc.close(SaveOptions.DONOTSAVECHANGES);
+                throw new Error("could not position artboard at [" + abRect.join(",") + "]: " + eRect.toString());
+            }
 
             var targetLayer = newDoc.layers[0];
             targetLayer.name = "Artwork";
