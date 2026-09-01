@@ -10,29 +10,29 @@
         win.margins = 10;
 
         var info = win.add("statictext", undefined,
-            "Αποθηκεύει κάθε artboard ως ξεχωριστό .ai αρχείο\nκαι κάνει Release to Layers σε κάθε group,\nέτοιμο για import στο After Effects.",
+            "Saves each artboard as a separate .ai file and runs\nRelease to Layers on every group, ready for\nimport into After Effects.",
             { multiline: true });
-        info.preferredSize.height = 48;
+        info.preferredSize.height = 60;
 
-        var optReleaseLayers = win.add("checkbox", undefined, "Release to Layers (Sequence) σε κάθε group");
+        var optReleaseLayers = win.add("checkbox", undefined, "Release to Layers (Sequence) on every group");
         optReleaseLayers.value = true;
 
-        var optCloseAfter = win.add("checkbox", undefined, "Κλείσιμο νέων αρχείων μετά την αποθήκευση");
+        var optCloseAfter = win.add("checkbox", undefined, "Close new files after saving");
         optCloseAfter.value = true;
 
-        var btnRun = win.add("button", undefined, "Επιλογή φακέλου & Εξαγωγή Artboards");
+        var btnRun = win.add("button", undefined, "Choose Folder & Export Artboards");
         btnRun.preferredSize.height = 32;
 
         function sanitizeName(name) {
             return (name || "").replace(/[\\\/:*?"<>|]/g, "_").replace(/\s+/g, "_");
         }
 
-        // Ελέγχει αν δύο ορθογώνια [left, top, right, bottom] επικαλύπτονται
+        // Checks whether two [left, top, right, bottom] rectangles overlap
         function boundsOverlap(a, b) {
             return !(a[2] < b[0] || a[0] > b[2] || a[1] < b[3] || a[3] > b[1]);
         }
 
-        // Επιστρέφει όλα τα top-level αντικείμενα του εγγράφου, σε σειρά μπροστά-προς-πίσω
+        // Returns all top-level items in the document, front-to-back
         function collectTopLevelItemsFrontToBack(doc) {
             var result = [];
             for (var i = 0; i < doc.layers.length; i++) {
@@ -40,7 +40,7 @@
                 if (lyr.locked || !lyr.visible) continue;
                 for (var j = 0; j < lyr.pageItems.length; j++) {
                     var it = lyr.pageItems[j];
-                    if (it.parent !== lyr) continue; // παράβλεψη αντικειμένων μέσα σε groups
+                    if (it.parent !== lyr) continue; // skip items nested inside groups
                     if (it.locked || it.hidden) continue;
                     result.push(it);
                 }
@@ -48,7 +48,7 @@
             return result;
         }
 
-        // Σπάει τα top-level αντικείμενα ενός layer σε ξεχωριστά layers (Release to Layers - Sequence)
+        // Splits a layer's top-level items into separate layers (Release to Layers - Sequence)
         function releaseLayerToSequence(doc, sourceLayer) {
             var items = [];
             for (var j = 0; j < sourceLayer.pageItems.length; j++) {
@@ -119,7 +119,7 @@
 
         btnRun.onClick = function () {
             if (app.documents.length === 0) {
-                alert("Δεν υπάρχει ανοιχτό έγγραφο.");
+                alert("No document is open.");
                 return;
             }
 
@@ -127,7 +127,7 @@
 
             var suggestedFolder = null;
             try { suggestedFolder = srcDoc.path; } catch (e) {}
-            var destFolder = Folder.selectDialog("Επιλέξτε φάκελο αποθήκευσης για τα artboards", suggestedFolder);
+            var destFolder = Folder.selectDialog("Choose a folder to save the artboards into", suggestedFolder);
             if (!destFolder) return;
 
             var baseDocName = sanitizeName(srcDoc.name.replace(/\.[^\.]+$/, ""));
@@ -155,13 +155,13 @@
                     app.activeDocument = srcDoc;
                 }
             } catch (err) {
-                alert("Σφάλμα: " + err.toString());
+                alert("Error: " + err.toString());
                 return;
             }
 
-            var msg = "Δημιουργήθηκαν " + created.length + " αρχεία.";
-            if (skipped.length > 0) msg += "\nΠαραλείφθηκαν (χωρίς περιεχόμενο): " + skipped.join(", ");
-            if (failed.length > 0) msg += "\nΑπέτυχαν: " + failed.join("; ");
+            var msg = "Created " + created.length + " file(s).";
+            if (skipped.length > 0) msg += "\nSkipped (no content): " + skipped.join(", ");
+            if (failed.length > 0) msg += "\nFailed: " + failed.join("; ");
             alert(msg);
         };
 
