@@ -15,7 +15,12 @@
         }
 
         // --- Adjustment layer, full comp duration, top of stack ---
-        var rig = comp.layers.addSolid([1, 1, 1], "STOPMOTION_RIG", comp.width, comp.height, comp.pixelAspect, comp.duration);
+        // Oversized 1.5x and centered so the Position wiggle below has room to move
+        // without exposing raw comp edges outside the adjustment layer's footprint.
+        var oversizePad = 1.5;
+        var rigWidth = Math.round(comp.width * oversizePad);
+        var rigHeight = Math.round(comp.height * oversizePad);
+        var rig = comp.layers.addSolid([1, 1, 1], "STOPMOTION_RIG", rigWidth, rigHeight, comp.pixelAspect, comp.duration);
         rig.adjustmentLayer = true;
         rig.moveToBeginning();
         rig.startTime = 0;
@@ -36,6 +41,10 @@
         var grainSlider = effects.addProperty("ADBE Slider Control");
         grainSlider.name = "Grain Amount";
         grainSlider.property("Slider").setValue(8);
+
+        var wiggleSlider = effects.addProperty("ADBE Slider Control");
+        wiggleSlider.name = "Wiggle Amount";
+        wiggleSlider.property("Slider").setValue(4);
 
         // --- Posterize Time, Frame Rate linked to FPS slider ---
         var posterize = effects.addProperty("ADBE Posterize Time");
@@ -61,12 +70,21 @@
         var noise = effects.addProperty("ADBE Noise");
         noise.property("Amount of Noise").expression = 'effect("Grain Amount")("Slider")';
 
+        // --- Position wiggle: held per FPS step, like a tripod bumped between shots ---
+        var position = rig.property("Transform").property("Position");
+        position.expression =
+            'posterizeTime(effect("FPS")("Slider"));\n' +
+            'wiggle(effect("FPS")("Slider"), effect("Wiggle Amount")("Slider"));';
+
         alert(
             "Stop-motion rig added.\n\n" +
             "STOPMOTION_RIG is now at the top of \"" + comp.name + "\".\n" +
             "Being an adjustment layer, it affects everything stacked below it in the comp " +
             "— move it if you only want the look on some layers.\n\n" +
-            "Tune FPS, Displace Amount and Grain Amount on the layer's effect controls."
+            "It's sized 1.5x the comp and centered, giving the Position wiggle room to move " +
+            "without exposing raw edges. Don't scale it down to comp size or push Wiggle Amount " +
+            "too high, or the padding margin can run out.\n\n" +
+            "Tune FPS, Displace Amount, Grain Amount and Wiggle Amount on the layer's effect controls."
         );
 
     } catch (err) {
