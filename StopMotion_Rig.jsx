@@ -1,7 +1,9 @@
 // StopMotion_Rig.jsx
 // Builds an expression-driven stop-motion rig on a full-comp adjustment layer:
-// Posterize Time, Turbulent Displace and Noise, all keyed off three Slider Controls
-// (FPS, Displace Amount, Grain Amount) so the whole look tunes from one place.
+// Posterize Time, Turbulent Displace, Noise, a Position wiggle, and a chromatic
+// aberration split (two extra helper layers), all keyed off Slider Controls on
+// STOPMOTION_RIG (FPS, Displace Amount, Grain Amount, Wiggle Amount, Chromatic
+// Aberration) so the whole look tunes from one place.
 
 (function stopMotionRig() {
 
@@ -46,6 +48,10 @@
         wiggleSlider.name = "Wiggle Amount";
         wiggleSlider.property("Slider").setValue(4);
 
+        var chromaticSlider = effects.addProperty("ADBE Slider Control");
+        chromaticSlider.name = "Chromatic Aberration";
+        chromaticSlider.property("Slider").setValue(2);
+
         // --- Posterize Time, Frame Rate linked to FPS slider ---
         var posterize = effects.addProperty("ADBE Posterize Time");
         posterize.property("Frame Rate").expression = 'effect("FPS")("Slider")';
@@ -76,15 +82,49 @@
             'posterizeTime(effect("FPS")("Slider"));\n' +
             'wiggle(effect("FPS")("Slider"), effect("Wiggle Amount")("Slider"));';
 
+        // --- Chromatic aberration: two channel-isolated copies, offset in opposite
+        // directions and screened back in, sitting directly below STOPMOTION_RIG so its
+        // Posterize Time hold also freezes the split. Green is left alone in the base image.
+        function addChannelSplitLayer(name, killChannels, offsetSign, afterLayer) {
+            var lyr = comp.layers.addSolid([1, 1, 1], name, rigWidth, rigHeight, comp.pixelAspect, comp.duration);
+            lyr.adjustmentLayer = true;
+            lyr.startTime = 0;
+            lyr.inPoint = 0;
+            lyr.outPoint = comp.duration;
+            lyr.moveAfter(afterLayer);
+            lyr.blendingMode = BlendingMode.SCREEN;
+
+            var lyrEffects = lyr.property("ADBE Effect Parade");
+            var levels = lyrEffects.addProperty("ADBE Easy Levels2");
+            for (var i = 0; i < killChannels.length; i++) {
+                levels.property(killChannels[i] + " Output Black").setValue(0);
+                levels.property(killChannels[i] + " Output White").setValue(0);
+            }
+
+            var xform = lyrEffects.addProperty("ADBE Geometry2");
+            xform.property("Position").expression =
+                'value + [' + offsetSign + ' * thisComp.layer("STOPMOTION_RIG").effect("Chromatic Aberration")("Slider"), 0]';
+
+            return lyr;
+        }
+
+        var caRed = addChannelSplitLayer("STOPMOTION_RIG_CA_RED", ["Green", "Blue"], "1", rig);
+        addChannelSplitLayer("STOPMOTION_RIG_CA_BLUE", ["Red", "Green"], "-1", caRed);
+
         alert(
             "Stop-motion rig added.\n\n" +
-            "STOPMOTION_RIG is now at the top of \"" + comp.name + "\".\n" +
-            "Being an adjustment layer, it affects everything stacked below it in the comp " +
-            "— move it if you only want the look on some layers.\n\n" +
-            "It's sized 1.5x the comp and centered, giving the Position wiggle room to move " +
-            "without exposing raw edges. Don't scale it down to comp size or push Wiggle Amount " +
+            "STOPMOTION_RIG is now at the top of \"" + comp.name + "\", with two helper layers " +
+            "(STOPMOTION_RIG_CA_RED / _CA_BLUE) directly beneath it for the chromatic aberration split. " +
+            "All three are adjustment layers, so together they affect everything stacked below them " +
+            "in the comp — move the group if you only want the look on some layers, and keep them " +
+            "adjacent and in this order.\n\n" +
+            "They're sized 1.5x the comp and centered, giving the Position wiggle room to move " +
+            "without exposing raw edges. Don't scale them down to comp size or push Wiggle Amount " +
             "too high, or the padding margin can run out.\n\n" +
-            "Tune FPS, Displace Amount, Grain Amount and Wiggle Amount on the layer's effect controls."
+            "Don't rename STOPMOTION_RIG — the two helper layers reference it by name for their " +
+            "Chromatic Aberration slider.\n\n" +
+            "Tune FPS, Displace Amount, Grain Amount, Wiggle Amount and Chromatic Aberration on " +
+            "STOPMOTION_RIG's effect controls."
         );
 
     } catch (err) {
