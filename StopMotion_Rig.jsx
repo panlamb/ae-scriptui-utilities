@@ -49,6 +49,14 @@
             'var fps = effect("FPS")("Slider");\n' +
             'Math.floor(time * fps) * 15;';
 
+        // Offset (Turbulence) jump: re-randomizes once per held frame, independent of any
+        // motion already present below, so the rig reads as stop-motion even on static footage.
+        turbulentDisplace.property("Offset (Turbulence)").expression =
+            'var fps = effect("FPS")("Slider");\n' +
+            'var amt = effect("Displace Amount")("Slider");\n' +
+            'seedRandom(Math.floor(time * fps), true);\n' +
+            'value + [random(-1, 1) * amt * 15, random(-1, 1) * amt * 15];';
+
         // --- Noise, Amount of Noise linked to Grain slider ---
         var noise = effects.addProperty("ADBE Noise");
         noise.property("Amount of Noise").expression = 'effect("Grain Amount")("Slider")';
