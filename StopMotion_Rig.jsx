@@ -82,10 +82,26 @@
             'posterizeTime(effect("FPS")("Slider"));\n' +
             'wiggle(effect("FPS")("Slider"), effect("Wiggle Amount")("Slider"));';
 
+        // Looks up a property by name and fails loudly (naming which one) instead of
+        // throwing an opaque "null is not an object" further down the call chain.
+        function reqProp(container, name) {
+            var p = container.property(name);
+            if (!p) {
+                throw new Error(
+                    'Could not find property "' + name + '" on "' + container.name +
+                    '" (' + container.matchName + '). Its name may differ in this After Effects ' +
+                    'version/build — check the Effect Controls panel for the exact label.'
+                );
+            }
+            return p;
+        }
+
         // --- Chromatic aberration: two channel-isolated copies, offset in opposite
         // directions and screened back in, sitting directly below STOPMOTION_RIG so its
-        // Posterize Time hold also freezes the split. Green is left alone in the base image.
-        function addChannelSplitLayer(name, killChannels, offsetSign, afterLayer) {
+        // Posterize Time hold also freezes the split. Channel Mixer is used instead of
+        // Levels/Shift Channels because its per-channel mix properties are plain numeric
+        // sliders, not popups or grouped controls that can be named differently.
+        function addChannelSplitLayer(name, keepChannel, offsetSign, afterLayer) {
             var lyr = comp.layers.addSolid([1, 1, 1], name, rigWidth, rigHeight, comp.pixelAspect, comp.duration);
             lyr.adjustmentLayer = true;
             lyr.startTime = 0;
@@ -95,21 +111,25 @@
             lyr.blendingMode = BlendingMode.SCREEN;
 
             var lyrEffects = lyr.property("ADBE Effect Parade");
-            var levels = lyrEffects.addProperty("ADBE Easy Levels2");
-            for (var i = 0; i < killChannels.length; i++) {
-                levels.property(killChannels[i] + " Output Black").setValue(0);
-                levels.property(killChannels[i] + " Output White").setValue(0);
+            var mixer = lyrEffects.addProperty("ADBE Channel Mixer");
+            var channels = ["Red", "Green", "Blue"];
+            for (var c = 0; c < channels.length; c++) {
+                if (channels[c] === keepChannel) continue;
+                reqProp(mixer, channels[c] + "-Red").setValue(0);
+                reqProp(mixer, channels[c] + "-Green").setValue(0);
+                reqProp(mixer, channels[c] + "-Blue").setValue(0);
+                reqProp(mixer, channels[c] + "-Const").setValue(0);
             }
 
             var xform = lyrEffects.addProperty("ADBE Geometry2");
-            xform.property("Position").expression =
+            reqProp(xform, "Position").expression =
                 'value + [' + offsetSign + ' * thisComp.layer("STOPMOTION_RIG").effect("Chromatic Aberration")("Slider"), 0]';
 
             return lyr;
         }
 
-        var caRed = addChannelSplitLayer("STOPMOTION_RIG_CA_RED", ["Green", "Blue"], "1", rig);
-        addChannelSplitLayer("STOPMOTION_RIG_CA_BLUE", ["Red", "Green"], "-1", caRed);
+        var caRed = addChannelSplitLayer("STOPMOTION_RIG_CA_RED", "Red", "1", rig);
+        addChannelSplitLayer("STOPMOTION_RIG_CA_BLUE", "Blue", "-1", caRed);
 
         alert(
             "Stop-motion rig added.\n\n" +
