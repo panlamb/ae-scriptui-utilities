@@ -96,12 +96,62 @@
             return p;
         }
 
+        // Recursively lists every leaf property's name under a property group, for
+        // error messages when a name-based lookup below can't find what it expected.
+        function listLeafPropertyNames(pg, prefix) {
+            var names = [];
+            for (var i = 1; i <= pg.numProperties; i++) {
+                var p = pg.property(i);
+                var label = prefix ? prefix + " > " + p.name : p.name;
+                if (p instanceof PropertyGroup) {
+                    names = names.concat(listLeafPropertyNames(p, label));
+                } else {
+                    names.push(label);
+                }
+            }
+            return names;
+        }
+
+        // Finds a leaf property whose name (combined with its parent group names, in
+        // case the effect nests per-channel sub-groups) contains all the given words.
+        // Avoids hardcoding an exact label like "Green Output Black", which can be
+        // worded or structured differently across After Effects versions.
+        function findPropertyContaining(pg, words, prefix) {
+            for (var i = 1; i <= pg.numProperties; i++) {
+                var p = pg.property(i);
+                var label = (prefix ? prefix + " " + p.name : p.name).toLowerCase();
+                if (p instanceof PropertyGroup) {
+                    var found = findPropertyContaining(p, words, label);
+                    if (found) return found;
+                } else {
+                    var matchesAll = true;
+                    for (var w = 0; w < words.length; w++) {
+                        if (label.indexOf(words[w]) === -1) { matchesAll = false; break; }
+                    }
+                    if (matchesAll) return p;
+                }
+            }
+            return null;
+        }
+
+        function killLevelsChannel(levels, channelWord) {
+            var black = findPropertyContaining(levels, [channelWord, "output", "black"], "");
+            var white = findPropertyContaining(levels, [channelWord, "output", "white"], "");
+            if (!black || !white) {
+                throw new Error(
+                    'Could not find the "' + channelWord + '" output controls on Levels (Individual Controls). ' +
+                    'Available properties: ' + listLeafPropertyNames(levels, "").join(", ")
+                );
+            }
+            black.setValue(0);
+            white.setValue(0);
+        }
+
         // --- Chromatic aberration: two channel-isolated copies, offset in opposite
         // directions and screened back in, sitting directly below STOPMOTION_RIG so its
-        // Posterize Time hold also freezes the split. Channel Mixer is used instead of
-        // Levels/Shift Channels because its per-channel mix properties are plain numeric
-        // sliders, not popups or grouped controls that can be named differently.
-        function addChannelSplitLayer(name, keepChannel, offsetSign, afterLayer) {
+        // Posterize Time hold also freezes the split. Uses Levels (Individual Controls)
+        // rather than the (now-obsolete, unavailable) Channel Mixer effect.
+        function addChannelSplitLayer(name, killWords, offsetSign, afterLayer) {
             var lyr = comp.layers.addSolid([1, 1, 1], name, rigWidth, rigHeight, comp.pixelAspect, comp.duration);
             lyr.adjustmentLayer = true;
             lyr.startTime = 0;
@@ -111,14 +161,9 @@
             lyr.blendingMode = BlendingMode.SCREEN;
 
             var lyrEffects = lyr.property("ADBE Effect Parade");
-            var mixer = lyrEffects.addProperty("ADBE Channel Mixer");
-            var channels = ["Red", "Green", "Blue"];
-            for (var c = 0; c < channels.length; c++) {
-                if (channels[c] === keepChannel) continue;
-                reqProp(mixer, channels[c] + "-Red").setValue(0);
-                reqProp(mixer, channels[c] + "-Green").setValue(0);
-                reqProp(mixer, channels[c] + "-Blue").setValue(0);
-                reqProp(mixer, channels[c] + "-Const").setValue(0);
+            var levels = lyrEffects.addProperty("ADBE Easy Levels2");
+            for (var i = 0; i < killWords.length; i++) {
+                killLevelsChannel(levels, killWords[i]);
             }
 
             var xform = lyrEffects.addProperty("ADBE Geometry2");
@@ -128,8 +173,8 @@
             return lyr;
         }
 
-        var caRed = addChannelSplitLayer("STOPMOTION_RIG_CA_RED", "Red", "1", rig);
-        addChannelSplitLayer("STOPMOTION_RIG_CA_BLUE", "Blue", "-1", caRed);
+        var caRed = addChannelSplitLayer("STOPMOTION_RIG_CA_RED", ["green", "blue"], "1", rig);
+        addChannelSplitLayer("STOPMOTION_RIG_CA_BLUE", ["red", "green"], "-1", caRed);
 
         alert(
             "Stop-motion rig added.\n\n" +
