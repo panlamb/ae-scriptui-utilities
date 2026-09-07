@@ -22,20 +22,37 @@
         var chkVector   = pnlOpts.add("checkbox", undefined, "Separate vector files (AI / EPS / PDF)");
         chkVector.value = true;
 
+        var chkDuplicates = pnlOpts.add("checkbox", undefined, "Separate duplicate footage (same source file)");
+        chkDuplicates.value = true;
+
         var chkUnused   = pnlOpts.add("checkbox", undefined, "Group unused footage into its own folder");
         chkUnused.value = true;
 
         var chkMissing  = pnlOpts.add("checkbox", undefined, "Flag missing/offline footage");
         chkMissing.value = true;
 
-        // --- Action ---
+        var chkColorLabel = pnlOpts.add("checkbox", undefined, "Color-label items by category");
+        chkColorLabel.value = true;
+
+        var chkRenameItems = pnlOpts.add("checkbox", undefined, "Number item names within each folder");
+        chkRenameItems.value = false;
+
+        // --- Actions ---
         var btnOrganize = win.add("button", undefined, "Organize Materials");
         btnOrganize.preferredSize.height = 32;
+
+        var grpReports = win.add("group");
+        grpReports.orientation = "row";
+        grpReports.alignChildren = ["fill", "top"];
+        grpReports.spacing = 6;
+
+        var btnReport = grpReports.add("button", undefined, "Project Report");
+        var btnAudit  = grpReports.add("button", undefined, "Font & Effects Audit");
 
         var statusText = win.add("statictext", undefined, "", {multiline: true});
         statusText.preferredSize.height = 40;
 
-        // Βασικά ονόματα φακέλων -> σειρά ταξινόμησης
+        // Βασικές κατηγορίες υλικού -> σειρά ταξινόμησης & χρώμα label (1-based, ίδιος αριθμός για φάκελο & label)
         var FOLDER_ORDER = [
             "Compositions",
             "Video Footage",
@@ -44,16 +61,21 @@
             "Solids",
             "Vector Files",
             "Placeholders",
+            "Duplicate Footage",
             "Unused Footage",
             "Missing Footage"
         ];
 
+        function categoryIndex(baseName) {
+            for (var i = 0; i < FOLDER_ORDER.length; i++) {
+                if (FOLDER_ORDER[i] === baseName) return i + 1;
+            }
+            return 0;
+        }
+
         function folderDisplayName(baseName) {
             if (!chkPrefix.value) return baseName;
-            var idx = 0;
-            for (var i = 0; i < FOLDER_ORDER.length; i++) {
-                if (FOLDER_ORDER[i] === baseName) { idx = i + 1; break; }
-            }
+            var idx = categoryIndex(baseName);
             var num = (idx < 10) ? "0" + idx : "" + idx;
             return num + "_" + baseName;
         }
@@ -76,12 +98,12 @@
             return newFolder;
         }
 
-        // Ταξινόμηση ενός item σε βασική κατηγορία υλικού
-        function categorize(item) {
+        // Βασική ταξινόμηση σε τύπο υλικού (χωρίς duplicate/unused overrides)
+        function categorizeBase(item, includeVector, includeMissing) {
             if (item instanceof CompItem) return "Compositions";
 
             if (item instanceof FootageItem) {
-                if (chkMissing.value) {
+                if (includeMissing) {
                     var missing = false;
                     try { missing = item.footageMissing; } catch (e) {}
                     if (missing) return "Missing Footage";
@@ -92,7 +114,7 @@
                     if (src instanceof SolidSource) return "Solids";
                     if (src instanceof PlaceholderSource) return "Placeholders";
 
-                    if (chkVector.value && (src instanceof FileSource) && item.file) {
+                    if (includeVector && (src instanceof FileSource) && item.file) {
                         var ext = item.file.name.split(".").pop().toLowerCase();
                         if (ext === "ai" || ext === "eps" || ext === "pdf") return "Vector Files";
                     }
@@ -110,15 +132,83 @@
             return null; // FolderItem ή μη αναγνωρίσιμος τύπος -> δεν μετακινείται
         }
 
+        // Πλήρης ταξινόμηση: εφαρμόζει duplicate/unused overrides πάνω στη βασική κατηγορία
+        function categorizeFull(item, dupMap, includeVector, includeMissing, includeDuplicate, includeUnused) {
+            var base = categorizeBase(item, includeVector, includeMissing);
+            if (!base) return null;
+            if (base === "Missing Footage") return base;
+
+            if (includeDuplicate && item instanceof FootageItem && item.file) {
+                var grp = dupMap[item.file.fsName];
+                if (grp && grp.length > 1) return "Duplicate Footage";
+            }
+
+            if (includeUnused && item instanceof FootageItem && item.usedIn.length === 0) {
+                return "Unused Footage";
+            }
+
+            return base;
+        }
+
+        // Χαρτογράφηση απόλυτου path αρχείου -> λίστα FootageItems που το χρησιμοποιούν (εντοπισμός duplicates)
+        function buildDuplicateMap() {
+            var map = {};
+            for (var i = 1; i <= app.project.numItems; i++) {
+                var it = app.project.item(i);
+                if (it instanceof FootageItem && it.file) {
+                    var key = it.file.fsName;
+                    if (!map[key]) map[key] = [];
+                    map[key].push(it);
+                }
+            }
+            return map;
+        }
+
+        function stripNumberPrefix(name) {
+            return name.replace(/^\d{2,4}\s*-\s*/, "");
+        }
+
+        function padNumber(n, groupLength) {
+            var width = (groupLength >= 100) ? 3 : 2;
+            var s = "" + n;
+            while (s.length < width) s = "0" + s;
+            return s;
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes <= 0) return "0 MB";
+            var mb = bytes / 1048576;
+            if (mb > 1024) return (mb / 1024).toFixed(2) + " GB";
+            return mb.toFixed(2) + " MB";
+        }
+
+        function showReportWindow(title, text) {
+            var w = new Window("dialog", title, undefined, {resizeable: true});
+            w.orientation = "column";
+            w.alignChildren = ["fill", "fill"];
+            w.preferredSize = [440, 480];
+
+            var et = w.add("edittext", undefined, text, {multiline: true, scrollable: true, readonly: true});
+            et.preferredSize = [420, 420];
+
+            var btnClose = w.add("button", undefined, "Close");
+            btnClose.onClick = function () { w.close(); };
+
+            w.show();
+        }
+
+        // --- Organize Materials ---
         btnOrganize.onClick = function () {
             app.beginUndoGroup("Organize Project Materials");
             folderCache = {};
 
-            var moved = 0, skipped = 0;
+            var moved = 0, renamed = 0, labeled = 0, skipped = 0;
 
             try {
+                var dupMap = buildDuplicateMap();
                 var total = app.project.numItems;
                 var targets = [];
+                var byCategory = {};
 
                 for (var i = 1; i <= total; i++) {
                     var item = app.project.item(i);
@@ -129,14 +219,35 @@
                         continue;
                     }
 
-                    var category = categorize(item);
+                    var category = categorizeFull(item, dupMap, chkVector.value, chkMissing.value, chkDuplicates.value, chkUnused.value);
                     if (!category) { skipped++; continue; }
 
-                    if (chkUnused.value && item instanceof FootageItem && category !== "Missing Footage") {
-                        if (item.usedIn.length === 0) category = "Unused Footage";
-                    }
-
                     targets.push({ item: item, category: category });
+                    if (!byCategory[category]) byCategory[category] = [];
+                    byCategory[category].push(item);
+                }
+
+                // Αρίθμηση ονομάτων εντός κάθε κατηγορίας (αλφαβητικά, με βάση το "καθαρό" όνομα)
+                if (chkRenameItems.value) {
+                    for (var cat in byCategory) {
+                        if (!byCategory.hasOwnProperty(cat)) continue;
+                        var group = byCategory[cat];
+                        group.sort(function (a, b) {
+                            var an = stripNumberPrefix(a.name).toLowerCase();
+                            var bn = stripNumberPrefix(b.name).toLowerCase();
+                            if (an < bn) return -1;
+                            if (an > bn) return 1;
+                            return 0;
+                        });
+                        for (var g = 0; g < group.length; g++) {
+                            var clean = stripNumberPrefix(group[g].name);
+                            var newName = padNumber(g + 1, group.length) + " - " + clean;
+                            if (group[g].name !== newName) {
+                                group[g].name = newName;
+                                renamed++;
+                            }
+                        }
+                    }
                 }
 
                 for (var j = 0; j < targets.length; j++) {
@@ -146,13 +257,152 @@
                         t.item.parentFolder = folder;
                         moved++;
                     }
+                    if (chkColorLabel.value) {
+                        var lbl = categoryIndex(t.category);
+                        if (lbl > 0 && lbl <= 16 && t.item.label !== lbl) {
+                            t.item.label = lbl;
+                            labeled++;
+                        }
+                    }
                 }
 
-                statusText.text = "Done. Moved: " + moved + "  |  Left as is: " + skipped;
+                statusText.text = "Done. Moved: " + moved + "  |  Renamed: " + renamed + "  |  Labeled: " + labeled + "  |  Left as is: " + skipped;
             } catch (err) {
                 alert("Σφάλμα κατά την οργάνωση: " + err.toString());
             } finally {
                 app.endUndoGroup();
+            }
+        };
+
+        // --- Project Report ---
+        btnReport.onClick = function () {
+            try {
+                var dupMap = buildDuplicateMap();
+                var counts = {};
+                for (var f = 0; f < FOLDER_ORDER.length; f++) counts[FOLDER_ORDER[f]] = 0;
+
+                var totalItems = 0, folderCount = 0, totalSize = 0;
+
+                for (var i = 1; i <= app.project.numItems; i++) {
+                    var item = app.project.item(i);
+                    if (item instanceof FolderItem) { folderCount++; continue; }
+
+                    totalItems++;
+                    var category = categorizeFull(item, dupMap, true, true, true, true);
+                    if (category) counts[category] = (counts[category] || 0) + 1;
+
+                    if (item instanceof FootageItem && item.file) {
+                        try { totalSize += item.file.length; } catch (e) {}
+                    }
+                }
+
+                var dupGroups = 0, dupItems = 0;
+                for (var key in dupMap) {
+                    if (!dupMap.hasOwnProperty(key)) continue;
+                    if (dupMap[key].length > 1) { dupGroups++; dupItems += dupMap[key].length; }
+                }
+
+                var lines = [];
+                lines.push("PROJECT REPORT");
+                lines.push("Project: " + (app.project.file ? app.project.file.name : "(unsaved)"));
+                lines.push("");
+                lines.push("Total items: " + totalItems + "   Folders: " + folderCount);
+                lines.push("Total footage size on disk: " + formatBytes(totalSize));
+                lines.push("");
+                lines.push("--- By category ---");
+                for (var c = 0; c < FOLDER_ORDER.length; c++) {
+                    var name = FOLDER_ORDER[c];
+                    lines.push(name + ": " + counts[name]);
+                }
+                lines.push("");
+                lines.push("--- Duplicates ---");
+                lines.push("Duplicate source files: " + dupGroups + " group(s), " + dupItems + " item(s) total");
+
+                showReportWindow("Project Report", lines.join("\n"));
+            } catch (err) {
+                alert("Σφάλμα κατά τη δημιουργία report: " + err.toString());
+            }
+        };
+
+        // --- Font & Effects Audit ---
+        btnAudit.onClick = function () {
+            try {
+                var fonts = {};   // key -> count
+                var effects = {}; // matchName -> {name, count}
+                var usedFontsFromApi = false;
+
+                try {
+                    if (app.project.usedFonts) {
+                        var uf = app.project.usedFonts;
+                        for (var u = 0; u < uf.length; u++) {
+                            var fi = uf[u];
+                            var key = fi.fontName + (fi.fontStyle ? (" (" + fi.fontStyle + ")") : "");
+                            fonts[key] = (fonts[key] || 0) + 1;
+                            usedFontsFromApi = true;
+                        }
+                    }
+                } catch (eApi) {}
+
+                for (var i = 1; i <= app.project.numItems; i++) {
+                    var comp = app.project.item(i);
+                    if (!(comp instanceof CompItem)) continue;
+
+                    for (var li = 1; li <= comp.numLayers; li++) {
+                        var layer = comp.layer(li);
+
+                        if (!usedFontsFromApi) {
+                            try {
+                                var textProp = layer.property("Source Text");
+                                if (textProp) {
+                                    var doc = textProp.value;
+                                    var fkey = doc.font + (doc.fontStyle ? (" (" + doc.fontStyle + ")") : "");
+                                    fonts[fkey] = (fonts[fkey] || 0) + 1;
+                                }
+                            } catch (eFont) {}
+                        }
+
+                        try {
+                            var fxParade = layer.property("ADBE Effect Parade");
+                            if (fxParade) {
+                                for (var e = 1; e <= fxParade.numProperties; e++) {
+                                    var eff = fxParade.property(e);
+                                    var mk = eff.matchName;
+                                    if (!effects[mk]) effects[mk] = { name: eff.name, count: 0 };
+                                    effects[mk].count++;
+                                }
+                            }
+                        } catch (eFx) {}
+                    }
+                }
+
+                var lines = [];
+                lines.push("FONT & EFFECTS AUDIT");
+                lines.push("Project: " + (app.project.file ? app.project.file.name : "(unsaved)"));
+                lines.push("");
+                lines.push("--- Fonts used ---");
+                var fontKeys = [];
+                for (var fk in fonts) { if (fonts.hasOwnProperty(fk)) fontKeys.push(fk); }
+                fontKeys.sort();
+                if (fontKeys.length === 0) lines.push("(none found)");
+                for (var fx2 = 0; fx2 < fontKeys.length; fx2++) {
+                    lines.push(fontKeys[fx2] + "  x" + fonts[fontKeys[fx2]]);
+                }
+
+                lines.push("");
+                lines.push("--- Effects / plugins used ---");
+                var effKeys = [];
+                for (var ek in effects) { if (effects.hasOwnProperty(ek)) effKeys.push(ek); }
+                effKeys.sort(function (a, b) { return effects[b].count - effects[a].count; });
+                if (effKeys.length === 0) lines.push("(none found)");
+                for (var ex = 0; ex < effKeys.length; ex++) {
+                    var mkey = effKeys[ex];
+                    var isNative = (mkey.indexOf("ADBE") === 0);
+                    lines.push(effects[mkey].name + "  x" + effects[mkey].count + (isNative ? "" : "   [non-native]"));
+                }
+
+                showReportWindow("Font & Effects Audit", lines.join("\n"));
+            } catch (err) {
+                alert("Σφάλμα κατά το audit: " + err.toString());
             }
         };
 
