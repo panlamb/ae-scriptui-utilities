@@ -53,7 +53,7 @@ Applies easing to every keyframe on every animated property of the selected laye
 A **Custom** section is also available for a specific influence percentage and In+Out / In only / Out only mode, and a checkbox restricts any of the above to keyframes already selected per-property.
 
 #### 8. Keyframe Markers (`KeyframeMarkers.jsx`)
-Drops a comp marker at every frame that has a keyframe, named after the layer(s) and propert(y/ies) animated there (e.g. `Logo (Position, Scale) | Text (Opacity)`). Multiple keyframes landing on the same frame are combined into a single marker instead of stacking duplicates, and re-running the script won't duplicate text already present in a marker. Choose between the active composition only or every composition in the project (including pre-comps) in one pass, optionally restrict to selected layers or already-selected keyframes, and toggle whether property names are included in the marker text.
+Drops a marker at every frame that has a keyframe, named after the propert(y/ies) animated there (e.g. `Position, Scale`). Choose **layer markers** (placed directly on each selected layer — the default) or **comp markers** (placed on the composition's timeline, prefixed with the layer name, e.g. `Logo (Position, Scale) | Text (Opacity)`). Multiple keyframes landing on the same frame are combined into a single marker instead of stacking duplicates, and re-running the script won't duplicate text already present in a marker. Choose between the active composition only or every composition in the project (including pre-comps) in one pass, optionally restrict to selected layers or already-selected keyframes, and toggle whether property names are included in the marker text.
 
 ---
 
