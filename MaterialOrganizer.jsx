@@ -48,6 +48,9 @@
         chkRenameItems.value = false;
 
         // --- Actions ---
+        var btnCreateStructure = win.add("button", undefined, "Create Folder Structure");
+        btnCreateStructure.preferredSize.height = 26;
+
         var btnOrganize = win.add("button", undefined, "Organize Materials");
         btnOrganize.preferredSize.height = 32;
 
@@ -228,6 +231,46 @@
 
             w.show();
         }
+
+        // Φάκελοι που δημιουργούνται εξ αρχής σε ένα καινούριο/άδειο project
+        var STARTER_FOLDERS = [
+            "Compositions",
+            "Video Footage",
+            "Images",
+            "Audio",
+            "Solids",
+            "Vector Files",
+            "Placeholders"
+        ];
+
+        // --- Create Folder Structure (για νέο project) ---
+        btnCreateStructure.onClick = function () {
+            app.beginUndoGroup("Create Material Folder Structure");
+            folderCache = {};
+            var created = 0;
+
+            try {
+                for (var i = 0; i < STARTER_FOLDERS.length; i++) {
+                    var before = app.project.numItems;
+                    getOrCreateFolder(STARTER_FOLDERS[i]);
+                    if (app.project.numItems > before) created++;
+                }
+
+                if (chkProtectFolder.value) {
+                    var wanted = txtProtectFolder.text.replace(/^\s+|\s+$/g, "");
+                    if (wanted && !findExistingFolderByName(wanted)) {
+                        app.project.items.addFolder(wanted);
+                        created++;
+                    }
+                }
+
+                statusText.text = "Folder structure ready. Created: " + created + " new folder(s).";
+            } catch (err) {
+                alert("Σφάλμα κατά τη δημιουργία φακέλων: " + err.toString());
+            } finally {
+                app.endUndoGroup();
+            }
+        };
 
         // --- Organize Materials ---
         btnOrganize.onClick = function () {
