@@ -30,6 +30,9 @@
         var rbAllComps = grpScope.add("radiobutton", undefined, "All compositions in project (incl. pre-comps)");
         rbActive.value = true;
 
+        var chkSurfaceNested = pnlOpts.add("checkbox", undefined, "Surface keyframes from inside pre-comps (no need to open them)");
+        chkSurfaceNested.value = true;
+
         var chkSelectedLayersOnly = pnlOpts.add("checkbox", undefined, "Only selected layers (active comp only)");
         chkSelectedLayersOnly.value = true;
 
@@ -67,34 +70,90 @@
             }
         }
 
-        // Ομαδοποιεί τα keyframes ενός layer ανά frame -> { frameIndex: { time, props: {propName:true} } }
-        function groupKeyframesByFrame(layer, fr, onlySelectedKeys) {
-            var properties = [];
-            collectKeyframedProperties(layer, properties);
-
+        // Σαρώνει ένα layer (και προαιρετικά μέσα σε pre-comps που χρησιμοποιεί, αναδρομικά), μετατρέπει
+        // τις τοπικές ώρες keyframe στη χρονική βάση του "ριζικού" comp/layer, και ομαδοποιεί ανά frame.
+        // groups: frameIndex -> { time, entries: { label: { propName: true } } }  ("" label = ίδιες οι ιδιότητες του root layer)
+        function collectGroupsForLayer(rootLayer, includeNested, onlySelectedKeys, fr) {
             var groups = {};
+            var pathStack = []; // comp ids στο τρέχον μονοπάτι αναδρομής, για αποφυγή κυκλικών αναφορών
 
-            for (var p = 0; p < properties.length; p++) {
-                var prop = properties[p];
-                var indices = [];
+            function recurse(layer, convertToTop, isRoot, pathPrefix) {
+                var properties = [];
+                collectKeyframedProperties(layer, properties);
 
-                if (onlySelectedKeys) {
-                    if (!prop.selectedKeys || prop.selectedKeys.length === 0) continue;
-                    indices = prop.selectedKeys;
-                } else {
-                    for (var k = 1; k <= prop.numKeys; k++) indices.push(k);
+                var ownLabel = isRoot ? "" : (pathPrefix ? pathPrefix + " > " + layer.name : layer.name);
+
+                for (var p = 0; p < properties.length; p++) {
+                    var prop = properties[p];
+                    var indices;
+
+                    if (onlySelectedKeys) {
+                        if (!prop.selectedKeys || prop.selectedKeys.length === 0) continue;
+                        indices = prop.selectedKeys;
+                    } else {
+                        indices = [];
+                        for (var k = 1; k <= prop.numKeys; k++) indices.push(k);
+                    }
+
+                    for (var ki = 0; ki < indices.length; ki++) {
+                        var tLocal = prop.keyTime(indices[ki]);
+                        var tTop = convertToTop(tLocal);
+                        var fIdx = Math.round(tTop / fr);
+
+                        if (!groups[fIdx]) groups[fIdx] = { time: fIdx * fr, entries: {} };
+                        if (!groups[fIdx].entries[ownLabel]) groups[fIdx].entries[ownLabel] = {};
+                        groups[fIdx].entries[ownLabel][prop.name] = true;
+                    }
                 }
 
-                for (var ki = 0; ki < indices.length; ki++) {
-                    var t = prop.keyTime(indices[ki]);
-                    var fIdx = Math.round(t / fr);
+                if (!includeNested) return;
 
-                    if (!groups[fIdx]) groups[fIdx] = { time: fIdx * fr, props: {} };
-                    groups[fIdx].props[prop.name] = true;
+                var src;
+                try { src = layer.source; } catch (eSrc) { src = null; }
+                var remap = false;
+                try { remap = layer.timeRemapEnabled; } catch (eRemap) {}
+
+                if (src && (src instanceof CompItem) && !remap) {
+                    var cid = src.id;
+                    if (pathStack.indexOf(cid) === -1) {
+                        pathStack.push(cid);
+
+                        var startT = layer.startTime;
+                        var stretch = layer.stretch;
+                        var newConvert = function (tY) { return convertToTop(startT + tY * stretch / 100); };
+                        var newPathPrefix = isRoot ? "" : ownLabel;
+
+                        for (var li = 1; li <= src.numLayers; li++) {
+                            recurse(src.layer(li), newConvert, false, newPathPrefix);
+                        }
+
+                        pathStack.pop();
+                    }
                 }
             }
 
+            recurse(rootLayer, function (t) { return t; }, true, "");
             return groups;
+        }
+
+        // Μετατρέπει ένα σύνολο entries { label: {propName:true} } σε κείμενο marker
+        function describeEntries(entries, includeProps) {
+            var parts = [];
+            for (var label in entries) {
+                if (!entries.hasOwnProperty(label)) continue;
+
+                var pnames = [];
+                for (var pn in entries[label]) {
+                    if (entries[label].hasOwnProperty(pn)) pnames.push(pn);
+                }
+
+                if (label === "") {
+                    parts.push(includeProps ? pnames.join(", ") : "Keyframe");
+                } else {
+                    parts.push(includeProps ? (label + " (" + pnames.join(", ") + ")") : label);
+                }
+            }
+            return parts.join(" | ");
         }
 
         // Προσθέτει/ενημερώνει ένα marker σε δοσμένη Property (comp.markerProperty ή layer.marker) στη δοσμένη ώρα
@@ -129,11 +188,11 @@
             return "added";
         }
 
-        // Layer markers: ένα marker ανά frame πάνω στο ίδιο το layer, με τα ονόματα των properties
-        function markKeyframesOnLayer(layer, includeProps, onlySelectedKeys) {
+        // Layer markers: ένα marker ανά frame πάνω στο ίδιο το layer (και ό,τι "ανέβηκε" από μέσα σε pre-comps του)
+        function markKeyframesOnLayer(layer, includeProps, onlySelectedKeys, includeNested) {
             var comp = layer.containingComp;
             var fr = comp.frameDuration;
-            var groups = groupKeyframesByFrame(layer, fr, onlySelectedKeys);
+            var groups = collectGroupsForLayer(layer, includeNested, onlySelectedKeys, fr);
 
             var mp;
             try { mp = layer.marker; } catch (eMarker) { return { added: 0, updated: 0 }; }
@@ -144,15 +203,7 @@
             for (var key in groups) {
                 if (!groups.hasOwnProperty(key)) continue;
                 var g = groups[key];
-
-                var desc;
-                if (includeProps) {
-                    var pnames = [];
-                    for (var pname in g.props) { if (g.props.hasOwnProperty(pname)) pnames.push(pname); }
-                    desc = pnames.join(", ");
-                } else {
-                    desc = "Keyframe";
-                }
+                var desc = describeEntries(g.entries, includeProps);
                 if (!desc) continue;
 
                 var res = upsertMarker(mp, fr, parseInt(key, 10), g.time, desc);
@@ -163,23 +214,37 @@
             return { added: added, updated: updated };
         }
 
-        // Comp markers: ένα marker ανά frame στη σύνθεση, με layer name (+ προαιρετικά properties)
-        function markKeyframesInComp(comp, layers, includeProps, onlySelectedKeys) {
+        // Comp markers: ένα marker ανά frame στη σύνθεση, με layer name (+ προαιρετικά pre-comp path / properties)
+        function markKeyframesInComp(comp, layers, includeProps, onlySelectedKeys, includeNested) {
             var fr = comp.frameDuration;
-            var combined = {}; // frameIndex -> { time, layers: { layerName: { propName: true } } }
+            var combined = {}; // frameIndex -> { time, chunks: [string, ...] }
 
             for (var l = 0; l < layers.length; l++) {
                 var layer = layers[l];
-                var groups = groupKeyframesByFrame(layer, fr, onlySelectedKeys);
+                var groups = collectGroupsForLayer(layer, includeNested, onlySelectedKeys, fr);
 
                 for (var key in groups) {
                     if (!groups.hasOwnProperty(key)) continue;
                     var g = groups[key];
 
-                    if (!combined[key]) combined[key] = { time: g.time, layers: {} };
-                    if (!combined[key].layers[layer.name]) combined[key].layers[layer.name] = {};
-                    for (var pname in g.props) {
-                        if (g.props.hasOwnProperty(pname)) combined[key].layers[layer.name][pname] = true;
+                    for (var label in g.entries) {
+                        if (!g.entries.hasOwnProperty(label)) continue;
+
+                        var fullLabel = label === "" ? layer.name : (layer.name + " > " + label);
+                        var chunk;
+
+                        if (includeProps) {
+                            var pnames = [];
+                            for (var pn in g.entries[label]) {
+                                if (g.entries[label].hasOwnProperty(pn)) pnames.push(pn);
+                            }
+                            chunk = fullLabel + " (" + pnames.join(", ") + ")";
+                        } else {
+                            chunk = fullLabel;
+                        }
+
+                        if (!combined[key]) combined[key] = { time: g.time, chunks: [] };
+                        combined[key].chunks.push(chunk);
                     }
                 }
             }
@@ -190,22 +255,7 @@
             for (var ckey in combined) {
                 if (!combined.hasOwnProperty(ckey)) continue;
                 var cg = combined[ckey];
-
-                var parts = [];
-                for (var lname in cg.layers) {
-                    if (!cg.layers.hasOwnProperty(lname)) continue;
-
-                    if (includeProps) {
-                        var pnames2 = [];
-                        for (var pname2 in cg.layers[lname]) {
-                            if (cg.layers[lname].hasOwnProperty(pname2)) pnames2.push(pname2);
-                        }
-                        parts.push(lname + " (" + pnames2.join(", ") + ")");
-                    } else {
-                        parts.push(lname);
-                    }
-                }
-                var desc = parts.join(" | ");
+                var desc = cg.chunks.join(" | ");
                 if (!desc) continue;
 
                 var res = upsertMarker(mp, fr, parseInt(ckey, 10), cg.time, desc);
@@ -242,6 +292,10 @@
                     targetComps.push(comp);
                 }
 
+                // Στο "All compositions" mode κάθε pre-comp επεξεργάζεται ήδη ξεχωριστά ως δικός του στόχος,
+                // οπότε το "surface nested" απενεργοποιείται εκεί για να μην διπλασιάζονται τα markers.
+                var includeNested = chkSurfaceNested.value && !rbAllComps.value;
+
                 for (var c = 0; c < targetComps.length; c++) {
                     var targetComp = targetComps[c];
                     var layers;
@@ -257,13 +311,13 @@
 
                     if (rbLayerMarkers.value) {
                         for (var l = 0; l < layers.length; l++) {
-                            var result = markKeyframesOnLayer(layers[l], chkIncludeProps.value, chkOnlySelectedKeys.value);
+                            var result = markKeyframesOnLayer(layers[l], chkIncludeProps.value, chkOnlySelectedKeys.value, includeNested);
                             markersAdded += result.added;
                             markersUpdated += result.updated;
                             if (result.added > 0 || result.updated > 0) affectedCount++;
                         }
                     } else {
-                        var result2 = markKeyframesInComp(targetComp, layers, chkIncludeProps.value, chkOnlySelectedKeys.value);
+                        var result2 = markKeyframesInComp(targetComp, layers, chkIncludeProps.value, chkOnlySelectedKeys.value, includeNested);
                         markersAdded += result2.added;
                         markersUpdated += result2.updated;
                         if (result2.added > 0 || result2.updated > 0) affectedCount++;
