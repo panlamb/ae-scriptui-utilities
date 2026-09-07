@@ -35,6 +35,26 @@ Applies a Posterize Time effect to selected layers to simulate stop-motion frame
 
 ![StopMotionify Framerate Controller panel](images/stopmotionify.png)
 
+#### 6. Material Organizer (`MaterialOrganizer.jsx`)
+One-click cleanup of the Project panel. **Create Folder Structure** sets up the empty type-based folders right after starting a new project, ready to drop material into. **Organize Materials** then sorts every item into those folders (Compositions, Video Footage, Images, Audio, Solids, Vector Files, Placeholders), with optional numbered prefixes for a fixed sort order, a dedicated folder for duplicate and unused footage, and flagging of missing/offline footage. Can reorganize items already buried in existing subfolders in one pass, while leaving a named folder (e.g. your "Final Comps" delivery folder) completely untouched. Also includes:
+* **Color-labeling** items automatically by category.
+* **Sequential renaming** of items within each folder for a tidy, ordered list.
+* **Project Report** — item counts per category, total footage size on disk, and duplicate-file groups.
+* **Font & Effects Audit** — lists every font and effect/plugin used across the project, flagging non-native ones, for a clean handoff.
+
+#### 7. Easy Ease Keyframes (`EasyEaseKeyframes.jsx`)
+Applies easing to every keyframe on every animated property of the selected layer(s) in one click — no need to select keyframes in the Graph Editor first. Five one-click presets cover the most common cases:
+* **Default (33%)** — the standard Easy Ease (F9), balanced in and out.
+* **Smooth (75%)** — slower, more cinematic ease in and out.
+* **Ease In (Stop)** — strong deceleration into the keyframe (camera settle, coming to rest).
+* **Ease Out (Launch)** — strong acceleration away from the keyframe (snappy start).
+* **Linear (Remove Ease)** — resets keyframes to straight linear interpolation.
+
+A **Custom** section is also available for a specific influence percentage and In+Out / In only / Out only mode, and a checkbox restricts any of the above to keyframes already selected per-property.
+
+#### 8. Keyframe Markers (`KeyframeMarkers.jsx`)
+Drops a marker at every frame that has a keyframe, named after the propert(y/ies) animated there (e.g. `Position, Scale`). Choose **layer markers** (placed directly on each selected layer — the default) or **comp markers** (placed on the composition's timeline, prefixed with the layer name, e.g. `Logo (Position, Scale) | Text (Opacity)`). With **"Surface keyframes from inside pre-comps"** (on by default), a pre-comp layer also gets markers for the keyframes animated on its *nested* layers — converted to the outer timeline and labeled with their path (e.g. `Logo > Circle (Position)`) — so you can see where the animation is without opening the pre-comp. Multiple keyframes landing on the same frame are combined into a single marker instead of stacking duplicates, and re-running the script won't duplicate text already present in a marker. Choose between the active composition only or every composition in the project (including pre-comps) in one pass, optionally restrict to selected layers or already-selected keyframes, and toggle whether property names are included in the marker text.
+
 ---
 
 ### Installation
