@@ -42,6 +42,9 @@ One-click cleanup of the Project panel. **Create Folder Structure** sets up the 
 * **Project Report** — item counts per category, total footage size on disk, and duplicate-file groups.
 * **Font & Effects Audit** — lists every font and effect/plugin used across the project, flagging non-native ones, for a clean handoff.
 
+#### 7. Easy Ease Keyframes (`EasyEaseKeyframes.jsx`)
+Applies Easy Ease to every keyframe on every animated property of the selected layer(s) in one click — no need to select keyframes in the Graph Editor first. Choose In+Out, In only, or Out only, set a custom influence percentage (default 33.33%, same as native Easy Ease), and optionally restrict it to keyframes already selected per-property.
+
 ---
 
 ### Installation
