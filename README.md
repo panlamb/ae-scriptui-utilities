@@ -35,6 +35,9 @@ Applies a Posterize Time effect to selected layers to simulate stop-motion frame
 
 ![StopMotionify Framerate Controller panel](images/stopmotionify.png)
 
+#### 6. Material Organizer (`MaterialOrganizer.jsx`)
+One-click cleanup of the Project panel. Sorts every item into type-based folders (Compositions, Video Footage, Images, Audio, Solids, Vector Files, Placeholders), with optional numbered prefixes for a fixed sort order, a dedicated folder for unused footage, and flagging of missing/offline footage. Can reorganize items already buried in existing subfolders in one pass.
+
 ---
 
 ### Installation
