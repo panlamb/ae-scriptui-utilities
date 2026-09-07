@@ -115,7 +115,11 @@
 
                 if (src && (src instanceof CompItem) && !remap) {
                     var cid = src.id;
-                    if (pathStack.indexOf(cid) === -1) {
+                    var onStack = false;
+                    for (var si = 0; si < pathStack.length; si++) {
+                        if (pathStack[si] === cid) { onStack = true; break; }
+                    }
+                    if (!onStack) {
                         pathStack.push(cid);
 
                         var startT = layer.startTime;
