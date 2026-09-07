@@ -13,6 +13,16 @@
         pnlOpts.spacing = 4;
         pnlOpts.margins = 8;
 
+        var grpProtect = pnlOpts.add("group");
+        grpProtect.orientation = "row";
+        grpProtect.alignChildren = ["left", "center"];
+
+        var chkProtectFolder = grpProtect.add("checkbox", undefined, "Keep this folder untouched:");
+        chkProtectFolder.value = true;
+
+        var txtProtectFolder = grpProtect.add("edittext", undefined, "Final Comps");
+        txtProtectFolder.characters = 14;
+
         var chkPrefix   = pnlOpts.add("checkbox", undefined, "Number folders for a fixed sort order");
         chkPrefix.value = true;
 
@@ -150,6 +160,28 @@
             return base;
         }
 
+        // Εντοπισμός υπάρχοντος φακέλου (οπουδήποτε στο project) με το ζητούμενο όνομα, προς εξαίρεση
+        function findExistingFolderByName(name) {
+            var wanted = name.replace(/^\s+|\s+$/g, "").toLowerCase();
+            if (!wanted) return null;
+            for (var i = 1; i <= app.project.numItems; i++) {
+                var it = app.project.item(i);
+                if (it instanceof FolderItem && it.name.toLowerCase() === wanted) return it;
+            }
+            return null;
+        }
+
+        // Ελέγχει αν το item βρίσκεται (σε οποιοδήποτε βάθος) μέσα στον δοσμένο φάκελο
+        function isInsideFolder(item, folder) {
+            var p = item.parentFolder;
+            while (p) {
+                if (p === folder) return true;
+                if (p === app.project.rootFolder) break;
+                p = p.parentFolder;
+            }
+            return false;
+        }
+
         // Χαρτογράφηση απόλυτου path αρχείου -> λίστα FootageItems που το χρησιμοποιούν (εντοπισμός duplicates)
         function buildDuplicateMap() {
             var map = {};
@@ -205,6 +237,8 @@
             var moved = 0, renamed = 0, labeled = 0, skipped = 0;
 
             try {
+                var protectedFolder = chkProtectFolder.value ? findExistingFolderByName(txtProtectFolder.text) : null;
+
                 var dupMap = buildDuplicateMap();
                 var total = app.project.numItems;
                 var targets = [];
@@ -213,6 +247,11 @@
                 for (var i = 1; i <= total; i++) {
                     var item = app.project.item(i);
                     if (item instanceof FolderItem) continue;
+
+                    if (protectedFolder && isInsideFolder(item, protectedFolder)) {
+                        skipped++;
+                        continue;
+                    }
 
                     if (!chkFlatten.value && item.parentFolder !== app.project.rootFolder) {
                         skipped++;
