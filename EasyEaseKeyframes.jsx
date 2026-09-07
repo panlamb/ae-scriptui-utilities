@@ -6,8 +6,31 @@
         win.spacing = 8;
         win.margins = 10;
 
-        // --- Options ---
-        var pnlOpts = win.add("panel", undefined, "Options");
+        // --- Presets ---
+        var pnlPresets = win.add("panel", undefined, "Presets");
+        pnlPresets.orientation = "column";
+        pnlPresets.alignChildren = ["fill", "top"];
+        pnlPresets.spacing = 4;
+        pnlPresets.margins = 8;
+
+        var rowPreset1 = pnlPresets.add("group");
+        rowPreset1.orientation = "row";
+        rowPreset1.alignChildren = ["fill", "top"];
+        rowPreset1.spacing = 4;
+        var btnPresetDefault = rowPreset1.add("button", undefined, "Default (33%)");
+        var btnPresetSmooth  = rowPreset1.add("button", undefined, "Smooth (75%)");
+
+        var rowPreset2 = pnlPresets.add("group");
+        rowPreset2.orientation = "row";
+        rowPreset2.alignChildren = ["fill", "top"];
+        rowPreset2.spacing = 4;
+        var btnPresetIn  = rowPreset2.add("button", undefined, "Ease In (Stop)");
+        var btnPresetOut = rowPreset2.add("button", undefined, "Ease Out (Launch)");
+
+        var btnPresetLinear = pnlPresets.add("button", undefined, "Linear (Remove Ease)");
+
+        // --- Custom ---
+        var pnlOpts = win.add("panel", undefined, "Custom");
         pnlOpts.orientation = "column";
         pnlOpts.alignChildren = ["left", "top"];
         pnlOpts.spacing = 6;
@@ -29,12 +52,11 @@
         var rbOut  = grpMode.add("radiobutton", undefined, "Easy Ease Out only");
         rbBoth.value = true;
 
-        var chkOnlySelected = pnlOpts.add("checkbox", undefined, "Only ease selected keyframes (per property)");
-        chkOnlySelected.value = false;
+        var btnApply = pnlOpts.add("button", undefined, "Apply Custom Ease");
+        btnApply.preferredSize.height = 28;
 
-        // --- Action ---
-        var btnApply = win.add("button", undefined, "Apply Easy Ease");
-        btnApply.preferredSize.height = 32;
+        var chkOnlySelected = win.add("checkbox", undefined, "Only ease selected keyframes (per property)");
+        chkOnlySelected.value = false;
 
         var statusText = win.add("statictext", undefined, "", {multiline: true});
         statusText.preferredSize.height = 30;
@@ -85,7 +107,17 @@
             property.setInterpolationTypeAtKey(keyIndex, newInType, newOutType);
         }
 
-        btnApply.onClick = function () {
+        // Επαναφέρει σε Linear interpolation (χωρίς ease) σε ένα συγκεκριμένο keyframe
+        function applyLinearAtKey(property, keyIndex, mode) {
+            var curInType = property.keyInInterpolationType(keyIndex);
+            var curOutType = property.keyOutInterpolationType(keyIndex);
+            var newInType = (mode !== "out") ? KeyframeInterpolationType.LINEAR : curInType;
+            var newOutType = (mode !== "in") ? KeyframeInterpolationType.LINEAR : curOutType;
+            property.setInterpolationTypeAtKey(keyIndex, newInType, newOutType);
+        }
+
+        // Κοινή λογική εφαρμογής (χρησιμοποιείται και από τα presets και από το custom Apply)
+        function runEasing(mode, influence, isLinear) {
             app.beginUndoGroup("Easy Ease Keyframes");
 
             var affectedProps = 0, affectedKeys = 0;
@@ -102,14 +134,6 @@
                     alert("Επιλέξτε τουλάχιστον ένα layer.");
                     return;
                 }
-
-                var influence = parseFloat(txtInfluence.text);
-                if (isNaN(influence) || influence <= 0) influence = 33.33;
-                if (influence > 100) influence = 100;
-
-                var mode = "both";
-                if (rbIn.value) mode = "in";
-                else if (rbOut.value) mode = "out";
 
                 for (var l = 0; l < layers.length; l++) {
                     var properties = [];
@@ -133,18 +157,47 @@
                         affectedProps++;
 
                         for (var ki = 0; ki < indices.length; ki++) {
-                            applyEasingAtKey(prop, indices[ki], mode, influence);
+                            if (isLinear) {
+                                applyLinearAtKey(prop, indices[ki], mode);
+                            } else {
+                                applyEasingAtKey(prop, indices[ki], mode, influence);
+                            }
                             affectedKeys++;
                         }
                     }
                 }
 
-                statusText.text = "Done. Properties: " + affectedProps + "  |  Keyframes eased: " + affectedKeys;
+                statusText.text = "Done. Properties: " + affectedProps + "  |  Keyframes affected: " + affectedKeys;
             } catch (err) {
-                alert("Σφάλμα κατά την εφαρμογή Easy Ease: " + err.toString());
+                alert("Σφάλμα κατά την εφαρμογή: " + err.toString());
             } finally {
                 app.endUndoGroup();
             }
+        }
+
+        // --- Preset buttons ---
+        // Default: το κλασικό Easy Ease (F9), ισορροπημένο 33/33
+        btnPresetDefault.onClick = function () { runEasing("both", 33.33, false); };
+        // Smooth: πιο αργό, κινηματογραφικό ease και στις δύο πλευρές (75/75)
+        btnPresetSmooth.onClick  = function () { runEasing("both", 75, false); };
+        // Ease In: έντονη επιβράδυνση καθώς φτάνει στο keyframe (π.χ. camera settle)
+        btnPresetIn.onClick      = function () { runEasing("in", 75, false); };
+        // Ease Out: έντονη επιτάχυνση φεύγοντας από το keyframe (π.χ. snappy launch)
+        btnPresetOut.onClick     = function () { runEasing("out", 75, false); };
+        // Linear: αφαιρεί το ease, γραμμική/μηχανική κίνηση
+        btnPresetLinear.onClick  = function () { runEasing("both", 0, true); };
+
+        // --- Custom Apply ---
+        btnApply.onClick = function () {
+            var influence = parseFloat(txtInfluence.text);
+            if (isNaN(influence) || influence <= 0) influence = 33.33;
+            if (influence > 100) influence = 100;
+
+            var mode = "both";
+            if (rbIn.value) mode = "in";
+            else if (rbOut.value) mode = "out";
+
+            runEasing(mode, influence, false);
         };
 
         win.layout.layout(true);

@@ -43,7 +43,14 @@ One-click cleanup of the Project panel. **Create Folder Structure** sets up the 
 * **Font & Effects Audit** — lists every font and effect/plugin used across the project, flagging non-native ones, for a clean handoff.
 
 #### 7. Easy Ease Keyframes (`EasyEaseKeyframes.jsx`)
-Applies Easy Ease to every keyframe on every animated property of the selected layer(s) in one click — no need to select keyframes in the Graph Editor first. Choose In+Out, In only, or Out only, set a custom influence percentage (default 33.33%, same as native Easy Ease), and optionally restrict it to keyframes already selected per-property.
+Applies easing to every keyframe on every animated property of the selected layer(s) in one click — no need to select keyframes in the Graph Editor first. Five one-click presets cover the most common cases:
+* **Default (33%)** — the standard Easy Ease (F9), balanced in and out.
+* **Smooth (75%)** — slower, more cinematic ease in and out.
+* **Ease In (Stop)** — strong deceleration into the keyframe (camera settle, coming to rest).
+* **Ease Out (Launch)** — strong acceleration away from the keyframe (snappy start).
+* **Linear (Remove Ease)** — resets keyframes to straight linear interpolation.
+
+A **Custom** section is also available for a specific influence percentage and In+Out / In only / Out only mode, and a checkbox restricts any of the above to keyframes already selected per-property.
 
 ---
 
