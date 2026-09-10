@@ -32,6 +32,15 @@
         var chkVector   = pnlOpts.add("checkbox", undefined, "Separate vector files (AI / EPS / PDF)");
         chkVector.value = true;
 
+        var chkPsdAi = pnlOpts.add("checkbox", undefined, "Group PSD & AI files into their own folder");
+        chkPsdAi.value = true;
+
+        var chkDissolveLayers = pnlOpts.add("checkbox", undefined, "Dissolve auto-generated \"<file> Layers\" import folders");
+        chkDissolveLayers.value = true;
+
+        var chkGroupProjects = pnlOpts.add("checkbox", undefined, "Group imported .aep projects into a \"Projects\" folder");
+        chkGroupProjects.value = true;
+
         var chkDuplicates = pnlOpts.add("checkbox", undefined, "Separate duplicate footage (same source file)");
         chkDuplicates.value = true;
 
@@ -76,7 +85,9 @@
             "Placeholders",
             "Duplicate Footage",
             "Unused Footage",
-            "Missing Footage"
+            "Missing Footage",
+            "PSD & AI Files",
+            "Projects"
         ];
 
         function categoryIndex(baseName) {
@@ -112,7 +123,7 @@
         }
 
         // Βασική ταξινόμηση σε τύπο υλικού (χωρίς duplicate/unused overrides)
-        function categorizeBase(item, includeVector, includeMissing) {
+        function categorizeBase(item, includeVector, includeMissing, includePsdAi) {
             if (item instanceof CompItem) return "Compositions";
 
             if (item instanceof FootageItem) {
@@ -127,9 +138,10 @@
                     if (src instanceof SolidSource) return "Solids";
                     if (src instanceof PlaceholderSource) return "Placeholders";
 
-                    if (includeVector && (src instanceof FileSource) && item.file) {
+                    if ((src instanceof FileSource) && item.file) {
                         var ext = item.file.name.split(".").pop().toLowerCase();
-                        if (ext === "ai" || ext === "eps" || ext === "pdf") return "Vector Files";
+                        if (includePsdAi && (ext === "psd" || ext === "ai")) return "PSD & AI Files";
+                        if (includeVector && (ext === "ai" || ext === "eps" || ext === "pdf")) return "Vector Files";
                     }
                 }
 
@@ -146,8 +158,8 @@
         }
 
         // Πλήρης ταξινόμηση: εφαρμόζει duplicate/unused overrides πάνω στη βασική κατηγορία
-        function categorizeFull(item, dupMap, includeVector, includeMissing, includeDuplicate, includeUnused) {
-            var base = categorizeBase(item, includeVector, includeMissing);
+        function categorizeFull(item, dupMap, includeVector, includeMissing, includeDuplicate, includeUnused, includePsdAi) {
+            var base = categorizeBase(item, includeVector, includeMissing, includePsdAi);
             if (!base) return null;
             if (base === "Missing Footage") return base;
 
@@ -183,6 +195,60 @@
                 p = p.parentFolder;
             }
             return false;
+        }
+
+        // Διαλύει τους φακέλους "<αρχείο> Layers" που φτιάχνει αυτόματα το AE σε layered import PSD/AI:
+        // ανεβάζει όλα τα περιεχόμενά τους στη ρίζα (θα ταξινομηθούν κανονικά στη συνέχεια) και διαγράφει τον άδειο φάκελο.
+        function dissolveImportLayerFolders() {
+            var count = 0;
+            var candidates = [];
+
+            for (var i = 1; i <= app.project.numItems; i++) {
+                var it = app.project.item(i);
+                if (it instanceof FolderItem && /\sLayers$/.test(it.name)) candidates.push(it);
+            }
+
+            for (var c = 0; c < candidates.length; c++) {
+                var folder = candidates[c];
+                var kids = [];
+                for (var j = 1; j <= app.project.numItems; j++) {
+                    var kid = app.project.item(j);
+                    if (kid.parentFolder === folder) kids.push(kid);
+                }
+                for (var k = 0; k < kids.length; k++) {
+                    kids[k].parentFolder = app.project.rootFolder;
+                }
+                try { folder.remove(); count++; } catch (eRemove) {}
+            }
+
+            return count;
+        }
+
+        // Εντοπίζει φακέλους από imported .aep projects (το AE τους ονομάζει ακριβώς σαν το αρχείο, π.χ. "Client.aep")
+        // και τους μετακινεί (άθικτους, με όλο το περιεχόμενό τους) μέσα σε έναν φάκελο "Projects".
+        function groupImportedProjectFolders() {
+            var moved = 0;
+            var folders = [];
+            var candidates = [];
+
+            for (var i = 1; i <= app.project.numItems; i++) {
+                var it = app.project.item(i);
+                if (it instanceof FolderItem && /\.aep$/i.test(it.name)) candidates.push(it);
+            }
+
+            if (candidates.length === 0) return { moved: moved, folders: folders };
+
+            var projectsFolder = getOrCreateFolder("Projects");
+            for (var c = 0; c < candidates.length; c++) {
+                var folder = candidates[c];
+                if (folder !== projectsFolder && folder.parentFolder !== projectsFolder) {
+                    folder.parentFolder = projectsFolder;
+                    moved++;
+                }
+                folders.push(folder);
+            }
+
+            return { moved: moved, folders: folders };
         }
 
         // Χαρτογράφηση απόλυτου path αρχείου -> λίστα FootageItems που το χρησιμοποιούν (εντοπισμός duplicates)
@@ -240,7 +306,9 @@
             "Audio",
             "Solids",
             "Vector Files",
-            "Placeholders"
+            "Placeholders",
+            "PSD & AI Files",
+            "Projects"
         ];
 
         // --- Create Folder Structure (για νέο project) ---
@@ -277,10 +345,22 @@
             app.beginUndoGroup("Organize Project Materials");
             folderCache = {};
 
-            var moved = 0, renamed = 0, labeled = 0, skipped = 0;
+            var moved = 0, renamed = 0, labeled = 0, skipped = 0, dissolved = 0, projectsGrouped = 0;
 
             try {
                 var protectedFolder = chkProtectFolder.value ? findExistingFolderByName(txtProtectFolder.text) : null;
+
+                if (chkDissolveLayers.value) dissolved = dissolveImportLayerFolders();
+
+                var excludedFolders = [];
+                if (protectedFolder) excludedFolders.push(protectedFolder);
+                if (chkGroupProjects.value) {
+                    var projectGroupResult = groupImportedProjectFolders();
+                    projectsGrouped = projectGroupResult.moved;
+                    for (var pf = 0; pf < projectGroupResult.folders.length; pf++) {
+                        excludedFolders.push(projectGroupResult.folders[pf]);
+                    }
+                }
 
                 var dupMap = buildDuplicateMap();
                 var total = app.project.numItems;
@@ -291,7 +371,11 @@
                     var item = app.project.item(i);
                     if (item instanceof FolderItem) continue;
 
-                    if (protectedFolder && isInsideFolder(item, protectedFolder)) {
+                    var isExcluded = false;
+                    for (var ef = 0; ef < excludedFolders.length; ef++) {
+                        if (isInsideFolder(item, excludedFolders[ef])) { isExcluded = true; break; }
+                    }
+                    if (isExcluded) {
                         skipped++;
                         continue;
                     }
@@ -301,7 +385,7 @@
                         continue;
                     }
 
-                    var category = categorizeFull(item, dupMap, chkVector.value, chkMissing.value, chkDuplicates.value, chkUnused.value);
+                    var category = categorizeFull(item, dupMap, chkVector.value, chkMissing.value, chkDuplicates.value, chkUnused.value, chkPsdAi.value);
                     if (!category) { skipped++; continue; }
 
                     targets.push({ item: item, category: category });
@@ -348,7 +432,8 @@
                     }
                 }
 
-                statusText.text = "Done. Moved: " + moved + "  |  Renamed: " + renamed + "  |  Labeled: " + labeled + "  |  Left as is: " + skipped;
+                statusText.text = "Done. Moved: " + moved + "  |  Renamed: " + renamed + "  |  Labeled: " + labeled +
+                    "  |  Left as is: " + skipped + "  |  Import folders dissolved: " + dissolved + "  |  Projects grouped: " + projectsGrouped;
             } catch (err) {
                 alert("Σφάλμα κατά την οργάνωση: " + err.toString());
             } finally {
@@ -370,7 +455,7 @@
                     if (item instanceof FolderItem) { folderCount++; continue; }
 
                     totalItems++;
-                    var category = categorizeFull(item, dupMap, true, true, true, true);
+                    var category = categorizeFull(item, dupMap, true, true, true, true, true);
                     if (category) counts[category] = (counts[category] || 0) + 1;
 
                     if (item instanceof FootageItem && item.file) {
