@@ -164,7 +164,7 @@
             if (base === "Missing Footage") return base;
 
             if (includeDuplicate && item instanceof FootageItem && item.file) {
-                var grp = dupMap[item.file.fsName];
+                var grp = dupMap[duplicateKeyFor(item)];
                 if (grp && grp.length > 1) return "Duplicate Footage";
             }
 
@@ -251,13 +251,23 @@
             return { moved: moved, folders: folders };
         }
 
-        // Χαρτογράφηση απόλυτου path αρχείου -> λίστα FootageItems που το χρησιμοποιούν (εντοπισμός duplicates)
+        // Κλειδί duplicate-detection για ένα FootageItem. Για PSD/AI είναι "file path + όνομα item":
+        // ένα layered import βγάζει πολλά items που δείχνουν όλα στο ίδιο αρχείο (διαφορετικά layers),
+        // και δεν είναι duplicates μεταξύ τους. Για όλους τους άλλους τύπους είναι μόνο το file path,
+        // ώστε να πιάνει το ίδιο αρχείο ακόμα κι αν το item έχει μετονομαστεί.
+        function duplicateKeyFor(item) {
+            var ext = item.file.name.split(".").pop().toLowerCase();
+            var isLayeredType = (ext === "psd" || ext === "ai");
+            return isLayeredType ? (item.file.fsName + "|" + item.name) : item.file.fsName;
+        }
+
+        // Χαρτογράφηση κλειδιού -> λίστα FootageItems, για εντοπισμό duplicates
         function buildDuplicateMap() {
             var map = {};
             for (var i = 1; i <= app.project.numItems; i++) {
                 var it = app.project.item(i);
                 if (it instanceof FootageItem && it.file) {
-                    var key = it.file.fsName;
+                    var key = duplicateKeyFor(it);
                     if (!map[key]) map[key] = [];
                     map[key].push(it);
                 }
