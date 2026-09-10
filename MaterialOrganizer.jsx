@@ -29,11 +29,8 @@
         var chkFlatten  = pnlOpts.add("checkbox", undefined, "Reorganize items already inside folders");
         chkFlatten.value = true;
 
-        var chkVector   = pnlOpts.add("checkbox", undefined, "Separate vector files (AI / EPS / PDF)");
-        chkVector.value = true;
-
-        var chkPsdAi = pnlOpts.add("checkbox", undefined, "Group PSD & AI files into their own folder");
-        chkPsdAi.value = true;
+        var chkDesignFiles = pnlOpts.add("checkbox", undefined, "Group design files into their own folder (AI / EPS / PDF / PSD)");
+        chkDesignFiles.value = true;
 
         var chkDissolveLayers = pnlOpts.add("checkbox", undefined, "Dissolve auto-generated \"<file> Layers\" import folders");
         chkDissolveLayers.value = true;
@@ -81,12 +78,11 @@
             "Images",
             "Audio",
             "Solids",
-            "Vector Files",
+            "Design Files",
             "Placeholders",
             "Duplicate Footage",
             "Unused Footage",
             "Missing Footage",
-            "PSD & AI Files",
             "Projects"
         ];
 
@@ -123,7 +119,7 @@
         }
 
         // Βασική ταξινόμηση σε τύπο υλικού (χωρίς duplicate/unused overrides)
-        function categorizeBase(item, includeVector, includeMissing, includePsdAi) {
+        function categorizeBase(item, includeMissing, includeDesignFiles) {
             if (item instanceof CompItem) return "Compositions";
 
             if (item instanceof FootageItem) {
@@ -138,10 +134,9 @@
                     if (src instanceof SolidSource) return "Solids";
                     if (src instanceof PlaceholderSource) return "Placeholders";
 
-                    if ((src instanceof FileSource) && item.file) {
+                    if (includeDesignFiles && (src instanceof FileSource) && item.file) {
                         var ext = item.file.name.split(".").pop().toLowerCase();
-                        if (includePsdAi && (ext === "psd" || ext === "ai")) return "PSD & AI Files";
-                        if (includeVector && (ext === "ai" || ext === "eps" || ext === "pdf")) return "Vector Files";
+                        if (ext === "ai" || ext === "eps" || ext === "pdf" || ext === "psd") return "Design Files";
                     }
                 }
 
@@ -158,8 +153,8 @@
         }
 
         // Πλήρης ταξινόμηση: εφαρμόζει duplicate/unused overrides πάνω στη βασική κατηγορία
-        function categorizeFull(item, dupMap, includeVector, includeMissing, includeDuplicate, includeUnused, includePsdAi) {
-            var base = categorizeBase(item, includeVector, includeMissing, includePsdAi);
+        function categorizeFull(item, dupMap, includeMissing, includeDuplicate, includeUnused, includeDesignFiles) {
+            var base = categorizeBase(item, includeMissing, includeDesignFiles);
             if (!base) return null;
             if (base === "Missing Footage") return base;
 
@@ -251,13 +246,13 @@
             return { moved: moved, folders: folders };
         }
 
-        // Κλειδί duplicate-detection για ένα FootageItem. Για PSD/AI είναι "file path + όνομα item":
-        // ένα layered import βγάζει πολλά items που δείχνουν όλα στο ίδιο αρχείο (διαφορετικά layers),
-        // και δεν είναι duplicates μεταξύ τους. Για όλους τους άλλους τύπους είναι μόνο το file path,
-        // ώστε να πιάνει το ίδιο αρχείο ακόμα κι αν το item έχει μετονομαστεί.
+        // Κλειδί duplicate-detection για ένα FootageItem. Για design files (AI/EPS/PDF/PSD) είναι
+        // "file path + όνομα item": ένα layered import βγάζει πολλά items που δείχνουν όλα στο ίδιο
+        // αρχείο (διαφορετικά layers), και δεν είναι duplicates μεταξύ τους. Για όλους τους άλλους
+        // τύπους είναι μόνο το file path, ώστε να πιάνει το ίδιο αρχείο ακόμα κι αν το item έχει μετονομαστεί.
         function duplicateKeyFor(item) {
             var ext = item.file.name.split(".").pop().toLowerCase();
-            var isLayeredType = (ext === "psd" || ext === "ai");
+            var isLayeredType = (ext === "psd" || ext === "ai" || ext === "eps" || ext === "pdf");
             return isLayeredType ? (item.file.fsName + "|" + item.name) : item.file.fsName;
         }
 
@@ -315,9 +310,8 @@
             "Images",
             "Audio",
             "Solids",
-            "Vector Files",
+            "Design Files",
             "Placeholders",
-            "PSD & AI Files",
             "Projects"
         ];
 
@@ -395,7 +389,7 @@
                         continue;
                     }
 
-                    var category = categorizeFull(item, dupMap, chkVector.value, chkMissing.value, chkDuplicates.value, chkUnused.value, chkPsdAi.value);
+                    var category = categorizeFull(item, dupMap, chkMissing.value, chkDuplicates.value, chkUnused.value, chkDesignFiles.value);
                     if (!category) { skipped++; continue; }
 
                     targets.push({ item: item, category: category });
@@ -465,7 +459,7 @@
                     if (item instanceof FolderItem) { folderCount++; continue; }
 
                     totalItems++;
-                    var category = categorizeFull(item, dupMap, true, true, true, true, true);
+                    var category = categorizeFull(item, dupMap, true, true, true, true);
                     if (category) counts[category] = (counts[category] || 0) + 1;
 
                     if (item instanceof FootageItem && item.file) {
