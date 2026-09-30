@@ -131,10 +131,40 @@
         // πιθανό τελικό/master comp -> πάει στον protected φάκελο αντί για το γενικό "Compositions"
         var FINAL_COMPS_CATEGORY = "__FinalComps__";
 
+        // Εντοπίζει comps που δημιουργήθηκαν αυτόματα από layered import PSD/AI/EPS/PDF:
+        // όλα τα layers τους δείχνουν στο ίδιο design αρχείο, και το όνομα του comp ταιριάζει με το αρχείο
+        // (έτσι ονομάζει το AE αυτά τα comps κατά το import). Αυτά δεν είναι "τελικά" comps.
+        function looksLikeImportComp(comp) {
+            if (comp.numLayers === 0) return false;
+
+            var commonPath = null;
+            var commonBase = null;
+
+            for (var i = 1; i <= comp.numLayers; i++) {
+                var layer = comp.layer(i);
+                var src;
+                try { src = layer.source; } catch (e) { src = null; }
+                if (!(src instanceof FootageItem) || !src.file) return false;
+
+                var ext = src.file.name.split(".").pop().toLowerCase();
+                if (ext !== "psd" && ext !== "ai" && ext !== "eps" && ext !== "pdf") return false;
+
+                var path = src.file.fsName;
+                if (commonPath === null) {
+                    commonPath = path;
+                    commonBase = src.file.name.replace(/\.[^.]+$/, "");
+                } else if (path !== commonPath) {
+                    return false;
+                }
+            }
+
+            return commonBase !== null && comp.name.toLowerCase() === commonBase.toLowerCase();
+        }
+
         // Βασική ταξινόμηση σε τύπο υλικού (χωρίς duplicate/unused overrides)
         function categorizeBase(item, includeMissing, includeDesignFiles, routeFinalComps) {
             if (item instanceof CompItem) {
-                if (routeFinalComps && item.usedIn.length === 0) return FINAL_COMPS_CATEGORY;
+                if (routeFinalComps && item.usedIn.length === 0 && !looksLikeImportComp(item)) return FINAL_COMPS_CATEGORY;
                 return "Compositions";
             }
 
