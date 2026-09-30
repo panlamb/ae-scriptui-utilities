@@ -23,6 +23,14 @@
         var txtProtectFolder = grpProtect.add("edittext", undefined, "Final Comps");
         txtProtectFolder.characters = 14;
 
+        var chkFinalComps = pnlOpts.add("checkbox", undefined, "Also auto-move top-level comps (not used in any other comp) into it");
+        chkFinalComps.value = true;
+
+        chkProtectFolder.onClick = function () {
+            chkFinalComps.enabled = chkProtectFolder.value;
+        };
+        chkFinalComps.enabled = chkProtectFolder.value;
+
         var chkPrefix   = pnlOpts.add("checkbox", undefined, "Number folders for a fixed sort order");
         chkPrefix.value = true;
 
@@ -96,6 +104,7 @@
         function folderDisplayName(baseName) {
             if (!chkPrefix.value) return baseName;
             var idx = categoryIndex(baseName);
+            if (idx === 0) return baseName; // κατηγορία εκτός FOLDER_ORDER (π.χ. ο custom protected φάκελος) -> χωρίς αρίθμηση
             var num = (idx < 10) ? "0" + idx : "" + idx;
             return num + "_" + baseName;
         }
@@ -118,9 +127,16 @@
             return newFolder;
         }
 
+        // Εσωτερικό sentinel category: "κορυφαίο" comp (δεν χρησιμοποιείται μέσα σε κανένα άλλο comp),
+        // πιθανό τελικό/master comp -> πάει στον protected φάκελο αντί για το γενικό "Compositions"
+        var FINAL_COMPS_CATEGORY = "__FinalComps__";
+
         // Βασική ταξινόμηση σε τύπο υλικού (χωρίς duplicate/unused overrides)
-        function categorizeBase(item, includeMissing, includeDesignFiles) {
-            if (item instanceof CompItem) return "Compositions";
+        function categorizeBase(item, includeMissing, includeDesignFiles, routeFinalComps) {
+            if (item instanceof CompItem) {
+                if (routeFinalComps && item.usedIn.length === 0) return FINAL_COMPS_CATEGORY;
+                return "Compositions";
+            }
 
             if (item instanceof FootageItem) {
                 if (includeMissing) {
@@ -153,10 +169,10 @@
         }
 
         // Πλήρης ταξινόμηση: εφαρμόζει duplicate/unused overrides πάνω στη βασική κατηγορία
-        function categorizeFull(item, dupMap, includeMissing, includeDuplicate, includeUnused, includeDesignFiles) {
-            var base = categorizeBase(item, includeMissing, includeDesignFiles);
+        function categorizeFull(item, dupMap, includeMissing, includeDuplicate, includeUnused, includeDesignFiles, routeFinalComps) {
+            var base = categorizeBase(item, includeMissing, includeDesignFiles, routeFinalComps);
             if (!base) return null;
-            if (base === "Missing Footage") return base;
+            if (base === "Missing Footage" || base === FINAL_COMPS_CATEGORY) return base;
 
             if (includeDuplicate && item instanceof FootageItem && item.file) {
                 var grp = dupMap[duplicateKeyFor(item)];
@@ -349,10 +365,24 @@
             app.beginUndoGroup("Organize Project Materials");
             folderCache = {};
 
-            var moved = 0, renamed = 0, labeled = 0, skipped = 0, dissolved = 0, projectsGrouped = 0;
+            var moved = 0, renamed = 0, labeled = 0, skipped = 0, dissolved = 0, projectsGrouped = 0, finalCompsRouted = 0;
 
             try {
                 var protectedFolder = chkProtectFolder.value ? findExistingFolderByName(txtProtectFolder.text) : null;
+
+                // Αν είναι ενεργό το auto-routing, φτιάξε (ή βρες) τον protected φάκελο τώρα,
+                // ώστε να υπάρχει έτοιμος να δεχτεί τα "κορυφαία" comps στο ίδιο πέρασμα.
+                var routeFinalComps = chkProtectFolder.value && chkFinalComps.value;
+                var finalCompsFolder = null;
+                if (routeFinalComps) {
+                    var protectName = txtProtectFolder.text.replace(/^\s+|\s+$/g, "");
+                    if (protectName) {
+                        finalCompsFolder = protectedFolder || app.project.items.addFolder(protectName);
+                        if (!protectedFolder) protectedFolder = finalCompsFolder;
+                    } else {
+                        routeFinalComps = false;
+                    }
+                }
 
                 if (chkDissolveLayers.value) dissolved = dissolveImportLayerFolders();
 
@@ -389,7 +419,7 @@
                         continue;
                     }
 
-                    var category = categorizeFull(item, dupMap, chkMissing.value, chkDuplicates.value, chkUnused.value, chkDesignFiles.value);
+                    var category = categorizeFull(item, dupMap, chkMissing.value, chkDuplicates.value, chkUnused.value, chkDesignFiles.value, routeFinalComps);
                     if (!category) { skipped++; continue; }
 
                     targets.push({ item: item, category: category });
@@ -422,12 +452,15 @@
 
                 for (var j = 0; j < targets.length; j++) {
                     var t = targets[j];
-                    var folder = getOrCreateFolder(t.category);
+                    var isFinalComp = (t.category === FINAL_COMPS_CATEGORY);
+                    var folder = isFinalComp ? finalCompsFolder : getOrCreateFolder(t.category);
+
                     if (t.item.parentFolder !== folder) {
                         t.item.parentFolder = folder;
                         moved++;
+                        if (isFinalComp) finalCompsRouted++;
                     }
-                    if (chkColorLabel.value) {
+                    if (chkColorLabel.value && !isFinalComp) {
                         var lbl = categoryIndex(t.category);
                         if (lbl > 0 && lbl <= 16 && t.item.label !== lbl) {
                             t.item.label = lbl;
@@ -437,7 +470,8 @@
                 }
 
                 statusText.text = "Done. Moved: " + moved + "  |  Renamed: " + renamed + "  |  Labeled: " + labeled +
-                    "  |  Left as is: " + skipped + "  |  Import folders dissolved: " + dissolved + "  |  Projects grouped: " + projectsGrouped;
+                    "  |  Left as is: " + skipped + "  |  Import folders dissolved: " + dissolved +
+                    "  |  Projects grouped: " + projectsGrouped + "  |  Final comps routed: " + finalCompsRouted;
             } catch (err) {
                 alert("Σφάλμα κατά την οργάνωση: " + err.toString());
             } finally {
@@ -459,7 +493,7 @@
                     if (item instanceof FolderItem) { folderCount++; continue; }
 
                     totalItems++;
-                    var category = categorizeFull(item, dupMap, true, true, true, true);
+                    var category = categorizeFull(item, dupMap, true, true, true, true, true);
                     if (category) counts[category] = (counts[category] || 0) + 1;
 
                     if (item instanceof FootageItem && item.file) {
@@ -485,6 +519,7 @@
                     var name = FOLDER_ORDER[c];
                     lines.push(name + ": " + counts[name]);
                 }
+                lines.push("Final/top-level comps (not used in any other comp): " + (counts[FINAL_COMPS_CATEGORY] || 0));
                 lines.push("");
                 lines.push("--- Duplicates ---");
                 lines.push("Duplicate source files: " + dupGroups + " group(s), " + dupItems + " item(s) total");
